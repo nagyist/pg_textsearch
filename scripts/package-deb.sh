@@ -59,7 +59,7 @@ Package: ${PACKAGE_NAME}
 Version: ${DEB_VERSION}
 Architecture: ${DEB_ARCH}
 Maintainer: Timescale <hello@timescale.com>
-Depends: postgresql-17
+Depends: timescaledb-2-postgresql-17 | postgresql-17
 Section: database
 Priority: optional
 Homepage: https://github.com/timescale/tapir
