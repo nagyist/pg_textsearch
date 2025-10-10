@@ -1,5 +1,5 @@
 EXTENSION = pg_textsearch
-DATA = sql/pg_textsearch--0.0.1.sql
+DATA = sql/pg_textsearch--0.0.1.sql sql/pg_textsearch--0.0.1--0.0.2.sql sql/pg_textsearch--0.0.2.sql
 
 # Source files
 # Full build - debugging initialization crash
@@ -27,7 +27,7 @@ PG_CPPFLAGS = -I$(srcdir)/src -g -O0 -Wall -Wextra -Wunused-function -Wunused-va
 # PG_CPPFLAGS += -DDEBUG_DUMP_INDEX
 
 # Test configuration
-REGRESS = aerodocs basic deletion dropped empty index limits manyterms mixed queries schema scoring1 scoring2 scoring3 scoring4 scoring5 scoring6 strings vector
+REGRESS = aerodocs basic deletion vacuum dropped empty index limits manyterms mixed queries schema scoring1 scoring2 scoring3 scoring4 scoring5 scoring6 strings vector
 REGRESS_OPTS = --inputdir=test --outputdir=test
 
 PG_CONFIG = pg_config
