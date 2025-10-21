@@ -44,7 +44,7 @@ cp "${BASEDIR}/pg_textsearch.so" "${BUILDDIR}${LIBDIR}/" || \
    { echo "Error: Could not find pg_textsearch library"; exit 1; }
 
 cp "${BASEDIR}/pg_textsearch.control" "${BUILDDIR}${SHAREDIR}/extension/"
-cp "${BASEDIR}/sql/pg_textsearch--0.0.2.sql" "${BUILDDIR}${SHAREDIR}/extension/"
+cp "${BASEDIR}/sql/pg_textsearch--0.0.3-dev.sql" "${BUILDDIR}${SHAREDIR}/extension/"
 
 # Determine architecture
 if [ "$ARCH" = "arm64" ]; then
@@ -62,7 +62,7 @@ Maintainer: Timescale <hello@timescale.com>
 Depends: timescaledb-2-postgresql-17 | postgresql-17
 Section: database
 Priority: optional
-Homepage: https://github.com/timescale/tapir
+Homepage: https://github.com/timescale/pg_textsearch
 Description: pg_textsearch - PostgreSQL extension for full-text search with BM25
  pg_textsearch provides full-text search capabilities with BM25 ranking for
  PostgreSQL. It implements a memtable-based architecture similar to
