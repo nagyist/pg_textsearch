@@ -861,9 +861,31 @@ tp_process_document_text(
 
 	if (term_count > 0)
 	{
+		/*
+		 * Acquire exclusive lock for this transaction if not already held.
+		 * During index build, we acquire once and hold for the entire build.
+		 */
+		tp_acquire_index_lock(index_state, LW_EXCLUSIVE);
+
 		/* Add document terms to posting lists */
 		tp_add_document_terms(
 				index_state, ctid, terms, frequencies, term_count, doc_length);
+
+		/*
+		 * Check memory after document completion.
+		 * We allow temporary overage within a document (bounded by single
+		 * document size), but check at document boundaries to decide if
+		 * spill is needed before the next document.
+		 *
+		 * TODO: Replace this error with spill when segment support is added.
+		 * For now, error to enforce limits. Future: tp_spill_memtable_to_disk
+		 */
+		if (tp_get_memory_usage(&index_state->shared->memory_usage) >
+			tp_get_memory_limit())
+		{
+			tp_report_memory_limit_exceeded(
+					&index_state->shared->memory_usage);
+		}
 
 		/* Free the terms array and individual lexemes */
 		tp_free_terms_array(terms, term_count);
@@ -1173,6 +1195,16 @@ tp_insert(
 	/* Get index state */
 	index_state = tp_get_local_index_state(RelationGetRelid(index));
 
+	/*
+	 * Acquire exclusive lock for this transaction if not already held.
+	 * This ensures memory consistency on NUMA systems and serializes
+	 * write transactions with respect to reads.
+	 */
+	if (index_state != NULL)
+	{
+		tp_acquire_index_lock(index_state, LW_EXCLUSIVE);
+	}
+
 	/* Extract text from first column */
 	document_text = DatumGetTextPP(values[0]);
 
@@ -1239,6 +1271,19 @@ tp_insert(
 						frequencies,
 						term_count,
 						doc_length);
+
+				/*
+				 * Check memory after document completion.
+				 * TODO: Replace this error with spill when segment support is
+				 * added. For now, error to enforce limits.
+				 * Future: tp_spill_memtable_to_disk
+				 */
+				if (tp_get_memory_usage(&index_state->shared->memory_usage) >
+					tp_get_memory_limit())
+				{
+					tp_report_memory_limit_exceeded(
+							&index_state->shared->memory_usage);
+				}
 			}
 		}
 

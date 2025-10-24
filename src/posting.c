@@ -21,6 +21,7 @@
 
 #include "common/hashfn.h"
 #include "constants.h"
+#include "memory.h"
 #include "memtable.h"
 #include "metapage.h"
 #include "posting.h"
@@ -34,9 +35,13 @@ int tp_posting_list_growth_factor = TP_POSTING_LIST_GROWTH_FACTOR;
  * Free a posting list and its entries array
  */
 void
-tp_free_posting_list(dsa_area *area, dsa_pointer posting_list_dp)
+tp_free_posting_list(
+		dsa_area	  *area,
+		TpMemoryUsage *memory_usage,
+		dsa_pointer	   posting_list_dp)
 {
 	TpPostingList *posting_list;
+	Size		   entries_size;
 
 	if (!DsaPointerIsValid(posting_list_dp))
 		return;
@@ -46,22 +51,50 @@ tp_free_posting_list(dsa_area *area, dsa_pointer posting_list_dp)
 	/* Free entries array if it exists */
 	if (DsaPointerIsValid(posting_list->entries_dp))
 	{
-		dsa_free(area, posting_list->entries_dp);
+		entries_size = posting_list->capacity * sizeof(TpPostingEntry);
+		tp_dsa_free(
+				area, memory_usage, posting_list->entries_dp, entries_size);
 	}
 
 	/* Free the posting list structure itself */
-	dsa_free(area, posting_list_dp);
+	tp_dsa_free(area, memory_usage, posting_list_dp, sizeof(TpPostingList));
 }
 
 /* Helper function to get entries array from posting list */
 TpPostingEntry *
 tp_get_posting_entries(dsa_area *area, TpPostingList *posting_list)
 {
+	TpPostingEntry *entries;
+
 	if (!posting_list || !DsaPointerIsValid(posting_list->entries_dp))
 		return NULL;
 	if (!area)
 		return NULL;
-	return dsa_get_address(area, posting_list->entries_dp);
+
+	entries = dsa_get_address(area, posting_list->entries_dp);
+
+#ifdef USE_ASSERT_CHECKING
+	/*
+	 * In debug builds, check if we're accessing freed memory.
+	 * If memory was freed by tp_dsa_free, it will be filled with
+	 * 0xDD sentinel pattern. Detecting this indicates use-after-free.
+	 */
+	if (entries && posting_list->doc_count > 0)
+	{
+		unsigned char *check = (unsigned char *)entries;
+		bool		   looks_freed =
+				(check[0] == 0xDD && check[1] == 0xDD && check[2] == 0xDD &&
+				 check[3] == 0xDD);
+
+		Assert(!looks_freed);
+		if (looks_freed)
+			elog(ERROR,
+				 "use-after-free detected: accessing freed posting "
+				 "list entries");
+	}
+#endif
+
+	return entries;
 }
 
 /*
@@ -69,16 +102,20 @@ tp_get_posting_entries(dsa_area *area, TpPostingList *posting_list)
  * Returns the DSA pointer to the allocated posting list
  */
 dsa_pointer
-tp_alloc_posting_list(dsa_area *area)
+tp_alloc_posting_list(dsa_area *dsa, TpMemoryUsage *memory_usage)
 {
 	dsa_pointer	   posting_list_dp;
 	TpPostingList *posting_list;
 
-	Assert(area != NULL);
+	Assert(dsa != NULL);
+	Assert(memory_usage != NULL);
 
-	/* Allocate posting list structure */
-	posting_list_dp = dsa_allocate(area, sizeof(TpPostingList));
-	posting_list	= dsa_get_address(area, posting_list_dp);
+	posting_list_dp =
+			tp_dsa_allocate(dsa, memory_usage, sizeof(TpPostingList));
+	if (!DsaPointerIsValid(posting_list_dp))
+		elog(ERROR, "Failed to allocate posting list in DSA");
+
+	posting_list = dsa_get_address(dsa, posting_list_dp);
 
 	/* Initialize posting list */
 	memset(posting_list, 0, sizeof(TpPostingList));
@@ -116,10 +153,15 @@ tp_add_document_to_posting_list(
 								   ? TP_INITIAL_POSTING_LIST_CAPACITY
 								   : posting_list->capacity *
 											 tp_posting_list_growth_factor;
+		Size  old_size	   = posting_list->capacity * sizeof(TpPostingEntry);
+		Size  new_size	   = new_capacity * sizeof(TpPostingEntry);
 
-		/* Allocate new array */
-		new_entries_dp = dsa_allocate(
-				local_state->dsa, new_capacity * sizeof(TpPostingEntry));
+		new_entries_dp = tp_dsa_allocate(
+				local_state->dsa,
+				&local_state->shared->memory_usage,
+				new_size);
+		if (!DsaPointerIsValid(new_entries_dp))
+			elog(ERROR, "Failed to allocate posting entries in DSA");
 
 		/* Copy existing entries if any */
 		if (posting_list->doc_count > 0 &&
@@ -133,8 +175,11 @@ tp_add_document_to_posting_list(
 				   old_entries,
 				   posting_list->doc_count * sizeof(TpPostingEntry));
 
-			/* Free old array */
-			dsa_free(local_state->dsa, posting_list->entries_dp);
+			tp_dsa_free(
+					local_state->dsa,
+					&local_state->shared->memory_usage,
+					posting_list->entries_dp,
+					old_size);
 		}
 
 		posting_list->entries_dp = new_entries_dp;

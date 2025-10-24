@@ -559,6 +559,182 @@ test_concurrent_index_drop() {
     log "✅ Concurrent index drop test completed"
 }
 
+# Test 8: Use-after-free bug - reader accessing posting list during reallocation
+test_read_during_posting_list_growth() {
+	log "Test 8: Concurrent read during posting list reallocation"
+
+	# Create a table with exactly 10 documents containing "racecondition" term
+	# This is below the initial posting list capacity of 16
+	run_sql "CREATE TABLE IF NOT EXISTS race_test (id SERIAL PRIMARY KEY, content TEXT);"
+	for i in $(seq 1 10); do
+		run_sql "INSERT INTO race_test (content) VALUES ('document $i with racecondition term');"
+	done
+
+	# Create index - posting list for "racecondition" will have capacity 16, count 10
+	run_sql "CREATE INDEX race_test_idx ON race_test USING bm25(content) WITH (text_config='english');"
+
+	info "Created index with 10 documents for 'racecondition' (below capacity 16)"
+
+	# Start a slow SELECT that reads through the posting list
+	# Use pg_sleep to make it slow enough for concurrent inserts to happen
+	local session1_output="${TMP_DIR:-/tmp}/session_race_reader.out"
+	local session1_pid
+	{
+		# This query will scan the posting list for "racecondition"
+		# ORDER BY forces it to read all results before returning
+		echo "SELECT id, content, pg_sleep(0.01)
+		      FROM race_test
+		      WHERE content <@> to_bm25query('racecondition', 'race_test_idx') < -0.01
+		      ORDER BY content <@> to_bm25query('racecondition', 'race_test_idx');"
+	} | psql -h "${DATA_DIR}" -p "${TEST_PORT}" -d "${TEST_DB}" > "$session1_output" 2>&1 &
+	session1_pid=$!
+
+	info "Reader: Started SELECT scanning posting list (PID: $session1_pid)"
+
+	# Give reader time to start scanning
+	sleep 0.05
+
+	# Now rapidly insert 25 more documents with the same term
+	# Document 17 will trigger reallocation from capacity 16 -> 32
+	# This frees the old array that the reader may still be accessing
+	info "Writer: Inserting 25 documents to trigger posting list reallocation..."
+	for i in $(seq 11 35); do
+		run_sql_quiet "INSERT INTO race_test (content) VALUES ('document $i with racecondition term');"
+	done
+
+	info "Writer: Inserts complete (should have triggered reallocation at doc 17)"
+
+	# Wait for reader to complete (or crash)
+	local reader_exit_code=0
+	wait $session1_pid 2>/dev/null || reader_exit_code=$?
+
+	# Check results
+	local session1_contents=$(cat "$session1_output" 2>/dev/null || echo "")
+
+	if [ $reader_exit_code -ne 0 ]; then
+		error "❌ CRASH: Reader process crashed during concurrent writes (exit code: $reader_exit_code)"
+		info "Reader output: $session1_contents"
+		info "This likely indicates use-after-free when posting list was reallocated"
+		return 1
+	elif echo "$session1_contents" | grep -qi "ERROR\|FATAL\|server closed\|terminated"; then
+		error "❌ ERROR: Reader encountered error during concurrent writes"
+		info "Reader output: $session1_contents"
+		return 1
+	else
+		# Count results returned
+		local result_count=$(echo "$session1_contents" | grep -c "racecondition" || echo "0")
+		info "Reader completed successfully: $result_count results returned"
+
+		if [ "$result_count" -ge 10 ]; then
+			log "✅ Read during posting list growth test passed (no crash)"
+		else
+			warn "Reader returned fewer results than expected: $result_count (expected >= 10)"
+		fi
+	fi
+
+	# Clean up
+	run_sql "DROP TABLE IF EXISTS race_test CASCADE;"
+}
+# Test 9: Multi-reallocation race - long write transaction with concurrent reads
+test_long_transaction_reallocation_race() {
+	log "Test 9: Long write transaction with multiple reallocations during concurrent reads"
+
+	# Create table and index
+	run_sql "CREATE TABLE IF NOT EXISTS chicken_race (id SERIAL PRIMARY KEY, content TEXT);"
+	run_sql "CREATE INDEX chicken_idx ON chicken_race USING bm25(content) WITH (text_config='english');"
+
+	info "Starting long write transaction that will trigger multiple posting list reallocations..."
+
+	# Start a LONG write transaction that inserts 10000 documents with "chicken"
+	# This will trigger reallocations at documents: 17, 33, 65, 129, 257, 513, 1025, 2049, 4097, 8193
+	local writer_output="${TMP_DIR:-/tmp}/chicken_writer.out"
+	{
+		echo "BEGIN;"
+		echo "SELECT pg_sleep(0.1);"  # Give readers time to start
+		for i in $(seq 1 10000); do
+			echo "INSERT INTO chicken_race (content) VALUES ('document $i about chicken farming');"
+			# Small delay between inserts to increase chance of reader overlap
+			if [ $((i % 5)) -eq 0 ]; then
+				echo "SELECT pg_sleep(0.01);"
+			fi
+		done
+		echo "COMMIT;"
+	} | psql -h "${DATA_DIR}" -p "${TEST_PORT}" -d "${TEST_DB}" > "$writer_output" 2>&1 &
+	local writer_pid=$!
+
+	info "Writer: Long transaction started (PID: $writer_pid), will insert 10000 documents with 'chicken'"
+
+	# Give writer time to start and insert first few documents
+	sleep 0.2
+
+	# Now start 3 concurrent readers that repeatedly query "chicken"
+	# CRITICAL: Use ORDER BY to trigger index scan which accesses posting list entries!
+	# WHERE clause only accesses doc_count, but ORDER BY actually reads entries_dp array
+	local reader_pids=()
+	declare -a reader_pids
+	for reader_id in 1 2 3; do
+		local reader_output="${TMP_DIR:-/tmp}/chicken_reader_${reader_id}.out"
+		{
+			for query_num in $(seq 1 200); do
+				echo "SELECT id FROM chicken_race ORDER BY content <@> to_bm25query('chicken', 'chicken_idx') LIMIT 10;"
+				sleep 0.01  # Small delay between queries
+			done
+		} | psql -h "${DATA_DIR}" -p "${TEST_PORT}" -d "${TEST_DB}" > "$reader_output" 2>&1 &
+		local last_pid=$!; reader_pids+=($last_pid); info "Reader $reader_id: Started (PID: $last_pid), will query 'chicken' 200 times"
+	done
+
+	# Wait for writer to complete
+	local writer_exit_code=0
+	wait $writer_pid 2>/dev/null || writer_exit_code=$?
+
+	if [ $writer_exit_code -ne 0 ]; then
+		error "❌ Writer transaction failed (exit code: $writer_exit_code)"
+		cat "$writer_output"
+		return 1
+	fi
+
+	info "Writer: Completed successfully"
+
+	# Wait for all readers and check for crashes
+	local reader_failures=0
+	local reader_idx=0
+	for reader_pid in "${reader_pids[@]}"; do
+		reader_idx=$((reader_idx + 1))
+		local reader_exit_code=0
+		wait $reader_pid 2>/dev/null || reader_exit_code=$?
+
+		local reader_output="${TMP_DIR:-/tmp}/chicken_reader_${reader_idx}.out"
+		local reader_contents=$(cat "$reader_output" 2>/dev/null || echo "")
+
+		if [ $reader_exit_code -ne 0 ]; then
+			error "❌ CRASH: Reader $reader_idx crashed (exit code: $reader_exit_code)"
+			info "Reader $reader_idx output: $reader_contents"
+			reader_failures=$((reader_failures + 1))
+		elif echo "$reader_contents" | grep -qi "ERROR\|FATAL\|server closed\|terminated"; then
+			error "❌ ERROR: Reader $reader_idx encountered error"
+			info "Reader $reader_idx output: $reader_contents"
+			reader_failures=$((reader_failures + 1))
+		else
+			info "Reader $reader_idx: Completed successfully"
+		fi
+	done
+	if [ $reader_failures -gt 0 ]; then
+		error "❌ Test FAILED: $reader_failures reader(s) crashed or encountered errors"
+		info "This indicates use-after-free when posting list was reallocated during concurrent reads"
+		return 1
+	fi
+
+	# Verify final state
+	local final_count=$(run_sql "SELECT COUNT(*) FROM chicken_race;" | grep -E "^\s*[0-9]+\s*$" | tr -d ' ')
+	if [ "$final_count" -eq 10000 ]; then
+		log "✅ Long transaction reallocation race test passed: All readers survived, $final_count documents inserted"
+	else
+		warn "Unexpected document count: $final_count (expected 10000)"
+	fi
+
+	# Clean up
+	run_sql "DROP TABLE IF EXISTS chicken_race CASCADE;"
+}
 run_concurrent_tests() {
     log "Starting comprehensive concurrent stress tests for pg_textsearch extension"
 
@@ -569,6 +745,8 @@ run_concurrent_tests() {
     test_update_delete_concurrency
     test_high_load_stress
     test_concurrent_index_drop
+    test_read_during_posting_list_growth
+    test_long_transaction_reallocation_race
 
     # Final system state check
     log "Final system state verification:"
