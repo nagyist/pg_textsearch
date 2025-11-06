@@ -49,7 +49,7 @@ SELECT title, content, content <@> to_bm25query('database', 'limit_test_idx') as
 FROM limit_test
 ORDER BY 3
 LIMIT 5;
-                              QUERY PLAN
+                              QUERY PLAN                              
 ----------------------------------------------------------------------
  Limit
    ->  Index Scan using limit_test_idx on limit_test
@@ -119,7 +119,7 @@ FROM limit_test
 WHERE id > 5
 ORDER BY 2
 LIMIT 7;
-                                             QUERY PLAN
+                                             QUERY PLAN                                             
 ----------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
@@ -271,7 +271,7 @@ SELECT title, content <@> to_bm25query('simple', 'limit_test_idx') as score
 FROM limit_test
 ORDER BY 2
 LIMIT 3;
-                             QUERY PLAN
+                             QUERY PLAN                             
 --------------------------------------------------------------------
  Limit
    ->  Index Scan using limit_test_idx on limit_test

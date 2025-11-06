@@ -19,11 +19,24 @@ implementation is in place and working. This is prerelease software and should n
 The original name of the project was Tapir - **T**extual **A**nalysis for **P**ostgres **I**nformation **R**etrieval.  We still use the tapir as our
 mascot and the name occurs in various places in the source code.
 
+## PostgreSQL Version Compatibility
+
+pg_textsearch supports:
+- PostgreSQL 17
+- PostgreSQL 18
+
+### New in PostgreSQL 18 Support
+
+- **Embedded index name syntax**: Use `index_name:query` format in cast expressions for
+  better compatibility with PG18's query planner
+- **Improved ORDER BY optimization**: Full support for PG18's consistent ordering semantics
+- **Query planner compatibility**: Works correctly with PG18's more eager expression evaluation
+
 ## Installation
 
 ### Linux and Mac
 
-Compile and install the extension (requires PostgreSQL 17)
+Compile and install the extension (requires PostgreSQL 17 or 18)
 
 ```sh
 cd /tmp
@@ -135,12 +148,20 @@ The `bm25query` type represents queries for BM25 scoring with optional index con
 ```sql
 -- Create a bm25query with index name (required for WHERE clause and standalone scoring)
 SELECT to_bm25query('search query text', 'docs_idx');
--- Returns: docs_idx:{search query text}
+-- Returns: docs_idx:search query text
+
+-- Embedded index name syntax (alternative form using cast)
+SELECT 'docs_idx:search query text'::bm25query;
+-- Returns: docs_idx:search query text
 
 -- Create a bm25query without index name (only works in ORDER BY with index scan)
 SELECT to_bm25query('search query text');
--- Returns: {search query text}
+-- Returns: search query text
 ```
+
+**Note**: In PostgreSQL 18, the embedded index name syntax using single colon (`:`) allows the
+query planner to determine the index name even when evaluating SELECT clause expressions early.
+This ensures compatibility across different query evaluation strategies.
 
 #### bm25query Functions
 
@@ -235,7 +256,7 @@ SELECT indexname FROM pg_indexes WHERE indexdef LIKE '%USING bm25%';
 If your machine has multiple Postgres installations, specify the path to `pg_config`:
 
 ```sh
-export PG_CONFIG=/Library/PostgreSQL/17/bin/pg_config
+export PG_CONFIG=/Library/PostgreSQL/18/bin/pg_config  # or 17
 make clean && make && make install
 ```
 
@@ -243,7 +264,8 @@ If you get compilation errors, install Postgres development files:
 
 ```sh
 # Ubuntu/Debian
-sudo apt install postgresql-server-dev-17
+sudo apt install postgresql-server-dev-17  # for PostgreSQL 17
+sudo apt install postgresql-server-dev-18  # for PostgreSQL 18
 ```
 
 ## Reference
@@ -340,4 +362,4 @@ brew install pre-commit && pre-commit install  # macOS
 4. Ensure `make installcheck` and `make test-concurrency` pass
 5. Submit a pull request
 
-All pull requests are automatically tested against PostgreSQL 17.
+All pull requests are automatically tested against PostgreSQL 17 and 18.

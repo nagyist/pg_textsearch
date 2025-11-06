@@ -114,8 +114,18 @@ tp_registry_get_dsa(void)
 		int			  tranche_id = LWLockNewTrancheId();
 
 		oldcontext = MemoryContextSwitchTo(TopMemoryContext);
-		tapir_dsa  = dsa_create(tranche_id);
+
+		/* Register the tranche for LWLock debugging/monitoring */
+		LWLockRegisterTranche(tranche_id, "pg_textsearch DSA");
+
+		tapir_dsa = dsa_create(tranche_id);
 		MemoryContextSwitchTo(oldcontext);
+
+		if (tapir_dsa == NULL)
+		{
+			LWLockRelease(&tapir_registry->lock);
+			elog(ERROR, "Failed to create DSA area");
+		}
 
 		/* Pin the DSA to keep it alive across backends */
 		dsa_pin(tapir_dsa);
@@ -130,6 +140,10 @@ tp_registry_get_dsa(void)
 	{
 		/* DSA exists - attach to it */
 		MemoryContext oldcontext;
+
+		/* Register the tranche for this backend */
+		/* Note: We don't know the exact tranche_id here, but DSA handles this
+		 * internally */
 
 		/* Attach in TopMemoryContext so the dsa_area structure
 		 * doesn't get freed when query memory contexts are cleaned up.
