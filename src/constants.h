@@ -9,15 +9,14 @@
 #define TP_DEFAULT_K1 1.2
 #define TP_DEFAULT_B  0.75
 
-/* Memory and capacity limits (not all currently enforced) */
-#define TP_QUERY_LIMITS_HASH_SIZE	  128
-#define TP_DEFAULT_INDEX_MEMORY_LIMIT 64
-#define TP_MAX_INDEX_MEMORY_LIMIT	  512
-#define TP_DEFAULT_QUERY_LIMIT		  1000
-#define TP_MAX_QUERY_LIMIT			  100000
-#define TP_DEFAULT_SEGMENT_THRESHOLD  10000
-#define TP_DEFAULT_BULK_LOAD_THRESHOLD \
-	100000 /* terms per xact to trigger spill */
+/* Memory and capacity limits */
+#define TP_QUERY_LIMITS_HASH_SIZE	   128
+#define TP_DEFAULT_QUERY_LIMIT		   1000
+#define TP_MAX_QUERY_LIMIT			   100000
+#define TP_DEFAULT_SEGMENT_THRESHOLD   10000
+#define TP_DEFAULT_BULK_LOAD_THRESHOLD 100000 /* terms/xact trigger spill */
+#define TP_DEFAULT_MEMTABLE_SPILL_THRESHOLD \
+	800000 /* posting entries to trigger spill (~8MB segments) */
 
 /* Hash table sizes */
 #define TP_STRING_INTERNING_HASH_SIZE	  1024

@@ -44,6 +44,8 @@ typedef struct TpMemtable
 	/* String interning hash table in DSA */
 	dshash_table_handle string_hash_handle; /* Handle to dshash string table */
 	int32				total_terms;		/* Total unique terms interned */
+	int64				total_postings;		/* Total posting entries for spill
+											 * threshold */
 
 	/* Document length hash table in DSA */
 	dshash_table_handle doc_lengths_handle; /* Handle for document length hash
@@ -70,13 +72,6 @@ typedef struct TpSharedIndexState
 	int64  total_len;  /* Total length of all documents */
 	float8 idf_sum;	   /* Sum of all IDF values for average IDF calculation */
 	/* Note: num_unique_terms is available as memtable->total_terms */
-
-	/*
-	 * Auto-spill tracking: DSA size at last spill to prevent repeated spills.
-	 * DSA memory doesn't shrink when we clear the memtable, so we track the
-	 * size at the last spill and only spill again if DSA has grown.
-	 */
-	Size last_spill_dsa_size;
 
 	/*
 	 * Per-index LWLock for transaction-level serialization.

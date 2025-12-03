@@ -37,7 +37,7 @@
 #include "segment/segment.h"
 #include "state.h"
 
-/* External GUC from mod.c */
+/* External GUCs from mod.c */
 extern int tp_bulk_load_threshold;
 
 /* Cache of local index states */
@@ -287,6 +287,7 @@ tp_create_shared_index_state(Oid index_oid, Oid heap_oid)
 	memtable = (TpMemtable *)dsa_get_address(dsa, memtable_dp);
 	memtable->string_hash_handle = DSHASH_HANDLE_INVALID;
 	memtable->total_terms		 = 0;
+	memtable->total_postings	 = 0;
 	memtable->doc_lengths_handle = DSHASH_HANDLE_INVALID;
 
 	shared_state->memtable_dp = memtable_dp;
@@ -901,7 +902,6 @@ tp_clear_memtable(TpLocalIndexState *local_state)
 	dshash_table *string_table;
 	dshash_table *doc_lengths_table;
 	Size		  dsa_size_before;
-	Size		  dsa_size_after;
 
 	if (!local_state || !local_state->shared)
 		return;
@@ -955,29 +955,27 @@ tp_clear_memtable(TpLocalIndexState *local_state)
 	/* Note: We preserve corpus statistics (total_docs, total_len, idf_sum)
 	 * as they represent the overall index state, not just the memtable */
 
+	/* Reset posting count for spill threshold tracking */
+	memtable->total_postings = 0;
+
 	/*
 	 * Aggressively try to reclaim empty DSA superblocks.
 	 * After destroying the hash tables, entire segments should be freeable.
 	 */
 	dsa_trim(local_state->dsa);
 
-	/* Capture DSA size after clearing */
-	dsa_size_after = dsa_get_total_size(local_state->dsa);
-
-	/*
-	 * Reset last_spill_dsa_size to allow future spills based on actual usage.
-	 * Since we destroyed the hash tables, the DSA size should have shrunk
-	 * significantly, and we want auto-spill to trigger based on new growth.
-	 */
-	local_state->shared->last_spill_dsa_size = dsa_size_after;
+	/* Suppress unused variable warning (used for debug logging if needed) */
+	(void)dsa_size_before;
 }
 
 /*
- * Check if any index had a bulk load (many terms added) this transaction.
- * If so, spill to disk to prevent unbounded memory growth.
+ * Check if any index should spill to disk due to bulk load threshold.
+ * Spill is triggered when terms added this transaction exceeds threshold.
+ *
+ * Note: memtable_spill_threshold is now checked in real-time via
+ * tp_auto_spill_if_needed() after each document insert.
  *
  * This is called at PRE_COMMIT via the transaction callback in mod.c.
- * The threshold is configurable via pg_textsearch.bulk_load_threshold GUC.
  */
 void
 tp_bulk_load_spill_check(void)
@@ -985,8 +983,10 @@ tp_bulk_load_spill_check(void)
 	HASH_SEQ_STATUS		  status;
 	LocalStateCacheEntry *entry;
 
-	/* Nothing to do if cache not initialized or threshold is 0 (disabled) */
-	if (local_state_cache == NULL || tp_bulk_load_threshold == 0)
+	/* Nothing to do if cache not initialized or threshold disabled */
+	if (local_state_cache == NULL)
+		return;
+	if (tp_bulk_load_threshold <= 0)
 		return;
 
 	/* Iterate through all cached local states */
@@ -1003,13 +1003,13 @@ tp_bulk_load_spill_check(void)
 		if (!local_state || !local_state->shared)
 			continue;
 
-		/* Check if this index exceeded the bulk load threshold */
+		/* Check bulk load threshold */
 		if (local_state->terms_added_this_xact < tp_bulk_load_threshold)
 			continue;
 
 		elog(NOTICE,
-			 "Bulk load spill triggered for index %u: %ld terms added this "
-			 "transaction (threshold: %d)",
+			 "Bulk load spill for index %u: %ld terms this xact "
+			 "(threshold: %d)",
 			 local_state->shared->index_oid,
 			 (long)local_state->terms_added_this_xact,
 			 tp_bulk_load_threshold);

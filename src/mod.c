@@ -37,6 +37,9 @@ bool tp_log_scores = false;
 /* Global variable for bulk load spill threshold (0 = disabled) */
 int tp_bulk_load_threshold = TP_DEFAULT_BULK_LOAD_THRESHOLD;
 
+/* Global variable for memtable spill threshold (0 = disabled) */
+int tp_memtable_spill_threshold = TP_DEFAULT_MEMTABLE_SPILL_THRESHOLD;
+
 /* Previous object access hook */
 static object_access_hook_type prev_object_access_hook = NULL;
 
@@ -75,20 +78,6 @@ _PG_init(void)
 	 * Define GUC parameters
 	 */
 	DefineCustomIntVariable(
-			"pg_textsearch.index_memory_limit",
-			"Per-index memory limit in MB",
-			"Controls the maximum memory each pg_textsearch index can use",
-			&tp_index_memory_limit,
-			TP_DEFAULT_INDEX_MEMORY_LIMIT, /* default 64MB */
-			1,							   /* min 1MB */
-			TP_MAX_INDEX_MEMORY_LIMIT,	   /* max 512MB */
-			PGC_SUSET,					   /* Superuser can change with SET */
-			0,
-			NULL,
-			NULL,
-			NULL);
-
-	DefineCustomIntVariable(
 			"pg_textsearch.default_limit",
 			"Default limit for BM25 queries when no LIMIT is detected",
 			"Controls the maximum number of documents to process when no "
@@ -118,13 +107,28 @@ _PG_init(void)
 
 	DefineCustomIntVariable(
 			"pg_textsearch.bulk_load_threshold",
-			"Terms per transaction to trigger bulk load spill",
-			"If a transaction adds at least this many terms, spill to disk "
-			"at transaction end. Set to 0 to disable bulk load spill.",
+			"Terms per transaction to trigger memtable spill",
+			"When this many terms are added in a single transaction, spill to "
+			"disk at transaction end. Set to 0 to disable.",
 			&tp_bulk_load_threshold,
 			TP_DEFAULT_BULK_LOAD_THRESHOLD, /* default 100K */
 			0,								/* min 0 (disabled) */
 			INT_MAX,						/* max INT_MAX */
+			PGC_USERSET,
+			0,
+			NULL,
+			NULL,
+			NULL);
+
+	DefineCustomIntVariable(
+			"pg_textsearch.memtable_spill_threshold",
+			"Posting entries to trigger memtable spill",
+			"When the memtable reaches this many posting entries, spill to "
+			"disk at transaction end. Set to 0 to disable.",
+			&tp_memtable_spill_threshold,
+			TP_DEFAULT_MEMTABLE_SPILL_THRESHOLD, /* default 1M */
+			0,									 /* min 0 (disabled) */
+			INT_MAX,							 /* max INT_MAX */
 			PGC_USERSET,
 			0,
 			NULL,
