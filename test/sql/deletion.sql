@@ -23,10 +23,11 @@ USING bm25 (content)
 WITH (text_config = 'english');
 
 -- Initial search - should find documents with "test"
+-- Note: WHERE with score comparison requires explicit index reference
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
 
 -- Delete one of the documents that contains "test"
@@ -37,7 +38,7 @@ DELETE FROM deletion_test WHERE id = 3;
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
 
 -- Delete a document that doesn't contain "test"
@@ -47,7 +48,7 @@ DELETE FROM deletion_test WHERE id = 4;
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
 
 -- Delete all remaining documents with "test"
@@ -57,7 +58,7 @@ DELETE FROM deletion_test WHERE content LIKE '%test%';
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
 
 -- Insert new documents after deletions
@@ -69,7 +70,7 @@ INSERT INTO deletion_test (content) VALUES
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
 
 -- Test with empty table after deleting everything
@@ -79,7 +80,7 @@ DELETE FROM deletion_test;
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
 
 -- Clean up

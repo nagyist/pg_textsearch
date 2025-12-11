@@ -22,7 +22,7 @@ CREATE INDEX dropped_idx ON dropped_idx_test
 USING bm25 (content)
 WITH (text_config = 'english');
 
--- Query should work with index
+-- Query should work with index (using explicit index reference)
 SELECT COUNT(*) AS with_index
 FROM dropped_idx_test
 WHERE content <@> to_bm25query('test', 'dropped_idx') < -0.001;

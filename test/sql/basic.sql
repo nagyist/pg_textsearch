@@ -46,14 +46,13 @@ INSERT INTO test_docs (content) VALUES
     ('jumped over lazy dog'),
     ('sphinx of black quartz');
 
--- Test text <@> bm25query operator (should work)
+-- Test text <@> bm25query operator with explicit index for score projection
 SELECT content, content <@> to_bm25query('hello', 'test_tapir_idx') as score
-
 FROM test_docs
 ORDER BY score
 LIMIT 1;
 
--- Test index name mismatch error in index scan context
+-- Test non-existent index error
 \set VERBOSITY terse
 \set ON_ERROR_STOP off
 SELECT content

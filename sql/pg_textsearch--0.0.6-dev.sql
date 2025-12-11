@@ -113,9 +113,9 @@ CREATE OPERATOR = (
 -- COST 1000: Standalone scoring is expensive. Each call parses document text
 -- with to_tsvector (~14μs per doc), opens the index, looks up IDF values, and
 -- calculates BM25 scores. High cost helps planner prefer index scans.
-CREATE FUNCTION text_bm25query_score(left_text text, right_query bm25query)
+CREATE FUNCTION bm25_text_bm25query_score(left_text text, right_query bm25query)
 RETURNS float8
-AS 'MODULE_PATHNAME', 'text_tpquery_score'
+AS 'MODULE_PATHNAME', 'bm25_text_bm25query_score'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE COST 1000;
 
 -- bm25query equality function
@@ -130,7 +130,23 @@ LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 CREATE OPERATOR <@> (
     LEFTARG = text,
     RIGHTARG = bm25query,
-    PROCEDURE = text_bm25query_score
+    PROCEDURE = bm25_text_bm25query_score
+);
+
+-- Function for text <@> text operator (planner hook rewrites to text <@> bm25query)
+-- COST 1000: High cost makes planner prefer index scans over seq scan + sort.
+-- In practice, this function errors without index scan context, but the cost
+-- helps the planner choose the right path before execution.
+CREATE FUNCTION bm25_text_text_score(text, text) RETURNS float8
+    AS 'MODULE_PATHNAME', 'bm25_text_text_score'
+    LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE COST 1000;
+
+-- <@> operator for text <@> text operations (implicit index resolution)
+-- The planner hook transforms this to text <@> bm25query when a BM25 index exists
+CREATE OPERATOR <@> (
+    LEFTARG = text,
+    RIGHTARG = text,
+    PROCEDURE = bm25_text_text_score
 );
 
 -- = operator for bm25query equality
@@ -142,16 +158,13 @@ CREATE OPERATOR = (
     HASHES
 );
 
--- Support function for calculating BM25 distances (negative scores for ASC ordering)
-CREATE FUNCTION bm25_distance(text, bm25query) RETURNS float8
-    AS 'MODULE_PATHNAME', 'tp_distance'
-    LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-
 -- bm25 operator class for text columns
+-- The planner hook rewrites text <@> text to text <@> bm25query, so we only
+-- need to register the bm25query operator and support function here.
 CREATE OPERATOR CLASS text_bm25_ops
 DEFAULT FOR TYPE text USING bm25 AS
     OPERATOR    1   <@> (text, bm25query) FOR ORDER BY float_ops,
-    FUNCTION    8   bm25_distance(text, bm25query);
+    FUNCTION    8   (text, bm25query)   bm25_text_bm25query_score(text, bm25query);
 
 -- Debug function to dump index contents (memtable and segments)
 -- Single argument version returns truncated output as text

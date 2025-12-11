@@ -51,6 +51,7 @@ SELECT split_part(
 ) AS total_docs_after_vacuum;
 
 -- Search should still work correctly after VACUUM
+-- Note: WHERE with score comparison requires explicit index reference
 SELECT id, substring(content, 1, 30) as content_preview
 FROM vacuum_test
 WHERE content <@> to_bm25query('test', 'vacuum_idx') < -0.001

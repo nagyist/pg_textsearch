@@ -24,15 +24,16 @@ NOTICE:  Using text search configuration: english
 NOTICE:  Using index options: k1=1.20, b=0.75
 NOTICE:  BM25 index build completed: 5 documents, avg_length=3.60, text_config='english' (k1=1.20, b=0.75)
 -- Initial search - should find documents with "test"
+-- Note: WHERE with score comparison requires explicit index reference
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
  id |         content_preview          
 ----+----------------------------------
-  3 | third document with test keyword
   5 | fifth document with test again
+  3 | third document with test keyword
 (2 rows)
 
 -- Delete one of the documents that contains "test"
@@ -42,7 +43,7 @@ DELETE FROM deletion_test WHERE id = 3;
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
  id |        content_preview         
 ----+--------------------------------
@@ -55,7 +56,7 @@ DELETE FROM deletion_test WHERE id = 4;
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
  id |        content_preview         
 ----+--------------------------------
@@ -68,7 +69,7 @@ DELETE FROM deletion_test WHERE content LIKE '%test%';
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
  id | content_preview 
 ----+-----------------
@@ -82,7 +83,7 @@ INSERT INTO deletion_test (content) VALUES
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
  id |        content_preview         
 ----+--------------------------------
@@ -95,7 +96,7 @@ DELETE FROM deletion_test;
 SELECT id, substring(content, 1, 40) as content_preview
 FROM deletion_test
 WHERE content <@> to_bm25query('test', 'deletion_idx') < -0.001
-ORDER BY content <@> to_bm25query('test', 'deletion_idx') DESC
+ORDER BY content <@> to_bm25query('test', 'deletion_idx')
 LIMIT 5;
  id | content_preview 
 ----+-----------------
