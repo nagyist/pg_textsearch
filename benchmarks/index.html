@@ -9,24 +9,50 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 1200px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
         }
-        h1 { color: #333; }
+        h1 { color: #333; margin-bottom: 10px; }
+        h2 { color: #555; margin-top: 30px; margin-bottom: 15px; }
+        .description {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 800px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         .chart-container {
             background: white;
             border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 15px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        canvas { max-height: 400px; }
+        canvas { max-height: 250px; }
+        .dataset-section {
+            margin-bottom: 40px;
+        }
     </style>
 </head>
 <body>
     <h1>pg_textsearch Benchmarks</h1>
+    <p class="description">
+        Performance tracking for <a href="https://github.com/timescale/pg_textsearch">pg_textsearch</a>.
+        Click any data point to view the commit.
+    </p>
     <div id="charts"></div>
 
     <script src="./data.js"></script>
@@ -38,6 +64,8 @@
             'rgb(255, 159, 64)',
             'rgb(153, 102, 255)',
             'rgb(255, 205, 86)',
+            'rgb(201, 203, 207)',
+            'rgb(255, 99, 71)',
         ];
 
         function formatDate(timestamp) {
@@ -53,113 +81,145 @@
             return hash ? hash.substring(0, 7) : '';
         }
 
-        function createChart(container, benchName, benchData) {
-            // Group data by metric name
-            const metrics = {};
-            benchData.forEach(run => {
-                run.benches.forEach(bench => {
-                    if (!metrics[bench.name]) {
-                        metrics[bench.name] = [];
-                    }
-                    metrics[bench.name].push({
-                        x: run.date,
-                        y: bench.value,
-                        commit: run.commit.id,
-                        date: run.date
-                    });
-                });
-            });
+        function getUnit(metricName, defaultUnit) {
+            if (metricName.includes('Index Size')) return 'MB';
+            return defaultUnit || 'ms';
+        }
 
-            // Create a chart for each metric
-            Object.entries(metrics).forEach(([metricName, data], idx) => {
-                const div = document.createElement('div');
-                div.className = 'chart-container';
+        function createChart(container, metricName, data, colorIdx) {
+            const div = document.createElement('div');
+            div.className = 'chart-container';
 
-                const canvas = document.createElement('canvas');
-                div.appendChild(canvas);
-                container.appendChild(div);
+            const canvas = document.createElement('canvas');
+            div.appendChild(canvas);
+            container.appendChild(div);
 
-                new Chart(canvas, {
-                    type: 'line',
-                    data: {
-                        datasets: [{
-                            label: metricName,
-                            data: data,
-                            borderColor: colors[idx % colors.length],
-                            backgroundColor: colors[idx % colors.length] + '33',
-                            fill: true,
-                            tension: 0.1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: metricName,
-                                font: { size: 16 }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    title: (items) => {
-                                        const item = items[0];
-                                        const date = formatDate(item.raw.date);
-                                        const commit = formatCommit(item.raw.commit);
-                                        return `${date} (${commit})`;
-                                    },
-                                    label: (item) => {
-                                        return `${item.dataset.label}: ${item.raw.y.toFixed(2)} ms`;
-                                    }
-                                }
-                            }
+            const unit = getUnit(metricName, data[0]?.unit || 'ms');
+
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: metricName,
+                        data: data,
+                        borderColor: colors[colorIdx % colors.length],
+                        backgroundColor: colors[colorIdx % colors.length] + '33',
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: metricName,
+                            font: { size: 13, weight: 'bold' }
                         },
-                        scales: {
-                            x: {
-                                type: 'time',
-                                time: {
-                                    unit: 'day',
-                                    displayFormats: {
-                                        day: 'MMM d'
-                                    }
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => {
+                                    const item = items[0];
+                                    const date = formatDate(item.raw.date);
+                                    const commit = formatCommit(item.raw.commit);
+                                    return `${date} (${commit})`;
                                 },
-                                title: {
-                                    display: true,
-                                    text: 'Date'
-                                }
-                            },
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Time (ms)'
-                                }
-                            }
-                        },
-                        onClick: (event, elements) => {
-                            if (elements.length > 0) {
-                                const idx = elements[0].index;
-                                const commit = data[idx].commit;
-                                if (commit) {
-                                    window.open(
-                                        `https://github.com/timescale/pg_textsearch/commit/${commit}`,
-                                        '_blank'
-                                    );
+                                label: (item) => {
+                                    return `${item.raw.y.toFixed(2)} ${unit}`;
                                 }
                             }
                         }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM d'
+                                }
+                            },
+                            title: {
+                                display: false
+                            },
+                            ticks: {
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: unit,
+                                font: { size: 10 }
+                            },
+                            ticks: {
+                                font: { size: 10 }
+                            }
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const idx = elements[0].index;
+                            const commit = data[idx].commit;
+                            if (commit) {
+                                window.open(
+                                    `https://github.com/timescale/pg_textsearch/commit/${commit}`,
+                                    '_blank'
+                                );
+                            }
+                        }
                     }
-                });
+                }
             });
         }
 
         // Render charts for each benchmark suite
         if (typeof window.BENCHMARK_DATA !== 'undefined') {
             const container = document.getElementById('charts');
-            Object.entries(window.BENCHMARK_DATA.entries).forEach(([name, data]) => {
+
+            Object.entries(window.BENCHMARK_DATA.entries).forEach(([suiteName, suiteData]) => {
+                // Create section for this benchmark suite
+                const section = document.createElement('div');
+                section.className = 'dataset-section';
+
                 const header = document.createElement('h2');
-                header.textContent = name;
-                container.appendChild(header);
-                createChart(container, name, data);
+                header.textContent = suiteName;
+                section.appendChild(header);
+
+                const grid = document.createElement('div');
+                grid.className = 'charts-grid';
+                section.appendChild(grid);
+
+                // Group data by metric name
+                const metrics = {};
+                suiteData.forEach(run => {
+                    run.benches.forEach(bench => {
+                        if (!metrics[bench.name]) {
+                            metrics[bench.name] = [];
+                        }
+                        metrics[bench.name].push({
+                            x: run.date,
+                            y: bench.value,
+                            unit: bench.unit,
+                            commit: run.commit.id,
+                            date: run.date
+                        });
+                    });
+                });
+
+                // Create a chart for each metric
+                Object.entries(metrics).forEach(([metricName, data], idx) => {
+                    createChart(grid, metricName, data, idx);
+                });
+
+                container.appendChild(section);
             });
         } else {
             document.getElementById('charts').innerHTML =
