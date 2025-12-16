@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765926063551,
+  "lastUpdate": 1765928998355,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -236,6 +236,68 @@ window.BENCHMARK_DATA = {
           },
           {
             "name": "cranfield - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "09e726021418ac873b9d6878f9ddd6dae68230ae",
+          "message": "Improve benchmark dashboard: dataset sizes and compact layout (#77)\n\n## Summary\n\n- Include document count in benchmark metric names (e.g., \"msmarco (8.8M\ndocs) - Index Build Time\")\n- Create 3-column responsive grid layout for benchmark dashboard\n(responsive down to 1 column on mobile)\n- Auto-deploy updated index.html to gh-pages after benchmarks run\n\n## Changes\n\n**format_for_action.sh**: Format document counts (1.4K, 8.8M, etc.) and\ninclude in metric names\n\n**benchmarks/gh-pages/index.html**: New compact layout with:\n- 3-column grid (responsive)\n- Smaller chart sizes\n- Cleaner styling\n- Dataset sections with headers\n\n**benchmark.yml**: Add step to deploy updated index.html to gh-pages",
+          "timestamp": "2025-12-16T23:30:56Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/09e726021418ac873b9d6878f9ddd6dae68230ae"
+        },
+        "date": 1765928997911,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 243.876,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 3.117,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 4.191,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 3.404,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 3.154,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 2.325,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 4.04,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
             "value": 0.02,
             "unit": "MB"
           }
