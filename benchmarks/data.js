@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765860275534,
+  "lastUpdate": 1765862889118,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -56,6 +56,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield - Avg Query Latency (20 queries)",
             "value": 4.06,
+            "unit": "ms"
+          }
+        ]
+      }
+    ],
+    "all Benchmarks": [
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "55a8b6c71318a0df49fe9dabbc2e8401503fb3a0",
+          "message": "Fix JSON generation in extract_metrics.sh (#73)\n\nUse jq for proper JSON formatting instead of heredoc string\ninterpolation. This handles empty/null values correctly and avoids\nmalformed JSON.",
+          "timestamp": "2025-12-16T02:54:28Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/55a8b6c71318a0df49fe9dabbc2e8401503fb3a0"
+        },
+        "date": 1765862888763,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "all - Index Build Time",
+            "value": 248.508,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Short Query (1 word)",
+            "value": 3.659,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Medium Query (3 words)",
+            "value": 4.364,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Long Query (question)",
+            "value": 3.62,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Common Term Query",
+            "value": 3.311,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Rare Term Query",
+            "value": 2.421,
             "unit": "ms"
           }
         ]
