@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765862889118,
+  "lastUpdate": 1765866140502,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -110,6 +110,58 @@ window.BENCHMARK_DATA = {
           {
             "name": "all - Rare Term Query",
             "value": 2.421,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "866fd1af7979c9077924da9753a8b8181dcfbfc6",
+          "message": "Run benchmark queries repeatedly for stable measurements (#74)\n\n## Summary\n- Each benchmark query now runs 10 times, reporting median/min/max times\n- Reduces variance from cache warming and system noise\n- Updated extract_metrics.sh to parse median from new output format\n\n## Testing\nManually verified query function works locally. Benchmark results will\nbe validated on next nightly run.",
+          "timestamp": "2025-12-16T06:01:42Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/866fd1af7979c9077924da9753a8b8181dcfbfc6"
+        },
+        "date": 1765866139666,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "all - Index Build Time",
+            "value": 242.301,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Short Query (1 word)",
+            "value": 3.092,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Medium Query (3 words)",
+            "value": 4.167,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Long Query (question)",
+            "value": 3.408,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Common Term Query",
+            "value": 3.146,
+            "unit": "ms"
+          },
+          {
+            "name": "all - Rare Term Query",
+            "value": 2.333,
             "unit": "ms"
           }
         ]
