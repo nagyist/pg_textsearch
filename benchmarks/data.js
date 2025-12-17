@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765952508015,
+  "lastUpdate": 1765952509273,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -999,6 +999,63 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Size",
             "value": 158.62,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "36502f82bb9a840caebdb974afa425352d7d0956",
+          "message": "Reclaim pages after segment compaction (#78)\n\n## Summary\n- Add page reclamation during segment compaction to prevent index bloat\n- Pages from merged source segments are now freed to PostgreSQL's FSM\n- New allocations check FSM first, reusing freed pages when available\n- Demote spill/merge notices to DEBUG1 to reduce build noise\n\n## Results (internal benchmark, 2.1M slack messages)\n\n| Metric | Before | After | Improvement |\n|--------|--------|-------|-------------|\n| Index Size | 831 MB | 473 MB | **43% smaller** |\n| Pages Reused | 0 | 45,026 | ✓ |",
+          "timestamp": "2025-12-17T02:09:26Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/36502f82bb9a840caebdb974afa425352d7d0956"
+        },
+        "date": 1765952508967,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 20062.195,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 3.589,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 1.261,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.127,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 2.754,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 3.58,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 153.1,
             "unit": "MB"
           }
         ]
