@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766008363022,
+  "lastUpdate": 1766011819092,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -418,6 +418,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 4.01,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "227818c762af2137ec92daf47c591c04b48fe196",
+          "message": "Cache fieldnorm and CTID tables at segment open for faster iteration\n\nV2 segment queries were slow because the iterator performed per-posting\nI/O to look up CTIDs and fieldnorms. This change preloads both tables\ninto memory when opening a V2 segment reader.\n\nPerformance improvement on 50K document benchmark:\n- Common term queries: 2.1-2.6x faster\n- Buffer hits reduced by 23-34x (e.g., 30K → 900)\n\nMemory overhead per segment reader:\n- Fieldnorm: 1 byte per document\n- CTID map: 6 bytes per document\n- Total: ~7 bytes per document (e.g., 700KB for 100K docs)\n\nThe caching remains beneficial with BMW optimization since we still\nneed CTIDs for result output and fieldnorms for scoring on blocks\nthat aren't skipped.",
+          "timestamp": "2025-12-17T22:23:28Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/227818c762af2137ec92daf47c591c04b48fe196"
+        },
+        "date": 1766011818087,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 272.074,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 3.202,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 4.261,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 3.404,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 3.204,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 2.319,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 4.04,
             "unit": "ms"
           },
           {
