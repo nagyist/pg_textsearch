@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766011824065,
+  "lastUpdate": 1766014875276,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -480,6 +480,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 4.04,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "8a1344956d99e719a1d323e0754b1343625bf175",
+          "message": "Limit V2 cache to segments with <=100K docs\n\nThe unconditional caching caused severe regression on large segments\n(MS MARCO 8.8M docs was 5-7x slower) because:\n- Loading 60MB of cache data upfront is expensive\n- Top-k queries only access a small fraction of documents\n- PostgreSQL's buffer cache efficiently handles sparse access patterns\n\nWith 100K threshold:\n- Small segments (flush, early compaction): cached for fast iteration\n- Large segments (late compaction): use per-posting reads via buffer cache",
+          "timestamp": "2025-12-17T23:16:28Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/8a1344956d99e719a1d323e0754b1343625bf175"
+        },
+        "date": 1766014874771,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 243.626,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 3.143,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 4.213,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 3.383,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 3.144,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 2.325,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 4.02,
             "unit": "ms"
           },
           {
