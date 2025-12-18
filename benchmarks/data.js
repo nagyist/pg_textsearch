@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766023468919,
+  "lastUpdate": 1766023469969,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1203,6 +1203,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
             "value": 16.7,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2551.58,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "aa2ed0705d742a148e5d62226bc20dcabdc9eca2",
+          "message": "Store fieldnorm inline in TpBlockPosting for V2 segments\n\nEliminates per-posting fieldnorm lookups during query execution by\nstoring the encoded fieldnorm directly in each TpBlockPosting entry.\nThis uses existing padding bytes, so there's zero storage overhead.\n\nChanges:\n- TpBlockPosting: uint8 fieldnorm replaces part of reserved padding\n- V2 segment writer: populates fieldnorm from docmap during write\n- V2 segment reader: reads fieldnorm directly from posting\n- Segment merge: reads/writes inline fieldnorm during merge\n- Removed cached_fieldnorms from TpSegmentReader (no longer needed)\n\nThe separate fieldnorm table is still written for backward compatibility\nand potential future use with compressed formats.",
+          "timestamp": "2025-12-18T00:34:51Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/aa2ed0705d742a148e5d62226bc20dcabdc9eca2"
+        },
+        "date": 1766023469771,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 868556.606,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 5.234,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 7.223,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 12.062,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.043,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 8.872,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 15.43,
             "unit": "ms"
           },
           {
