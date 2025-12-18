@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766072525438,
+  "lastUpdate": 1766072563618,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -2041,6 +2041,63 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Size",
             "value": 153.1,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "1080101c3bf0a2e34ccd3c7b457da118e8253885",
+          "message": "Change docmap lookup failure from WARNING to ERROR\n\nA missing CTID in the docmap indicates a data integrity bug that should\nnot be silently handled. Fail fast with a clear error message instead.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2025-12-18T15:12:49Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/1080101c3bf0a2e34ccd3c7b457da118e8253885"
+        },
+        "date": 1766072562986,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 22869.536,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 7.322,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 25.979,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 37.28,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 14.89,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 18.405,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 144.35,
             "unit": "MB"
           }
         ]
