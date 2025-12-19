@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766125237061,
+  "lastUpdate": 1766125239039,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1598,6 +1598,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Index Size",
             "value": 2551.58,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0ca3751e0f0a001e6ffb6c729890aabfd1152ae9",
+          "message": "Add storage and query optimization roadmap (#79)\n\n## Summary\n\n- Adds design doc (`OPTIMIZATION_ROADMAP.md`) covering planned\noptimizations:\n- Block-Max WAND algorithm for O(k log n) top-k queries (vs current\nO(n))\n  - Block-aligned posting storage with skip lists\n  - FOR/PFOR compression targeting 50%+ space reduction\n  - Fieldnorm quantization using Lucene's SmallFloat scheme\n  - Phased implementation plan (v0.0.4 through v0.0.7)\n\n- Updates README to clarify \"not yet recommended\" production status\n\nThe roadmap draws from analysis of Tantivy and Lucene implementations,\nprioritizing asymptotic gains (BMW) over constant-factor gains\n(compression).",
+          "timestamp": "2025-12-17T20:06:29Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/0ca3751e0f0a001e6ffb6c729890aabfd1152ae9"
+        },
+        "date": 1766125238389,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 543532.68,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 5.265,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 6.759,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 11.468,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.033,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 9.166,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 13.01,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2807.35,
             "unit": "MB"
           }
         ]
