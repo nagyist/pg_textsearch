@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766189778876,
+  "lastUpdate": 1766193701772,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1965,6 +1965,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
             "value": 14.94,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2551.58,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "8fd6589c4c289b15d7a4a5046e8e9d7f4a47650d",
+          "message": "Bump version to 0.2.0-dev, target 1.0.0 GA in Feb 2025\n\n- Skip 0.1.1-dev, go directly from 0.1.0 to 0.2.0-dev\n- Update roadmaps with bigger version jumps: 0.2.0 -> 0.5.0 -> 1.0.0\n- Block storage foundation (current) targets v0.2.0\n- Query optimizations (BMW/MAXSCORE) target v0.5.0\n- Production ready GA targets v1.0.0 (Feb 2025)",
+          "timestamp": "2025-12-20T01:19:03Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/8fd6589c4c289b15d7a4a5046e8e9d7f4a47650d"
+        },
+        "date": 1766193701236,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 747825.846,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 5.467,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 7.491,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 12.476,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.043,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 9.13,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 15.47,
             "unit": "ms"
           },
           {
