@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766225925893,
+  "lastUpdate": 1766283735196,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1038,6 +1038,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 3.98,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "4a3fe86f16b7ba2ec78317f38debaa376b7e70a1",
+          "message": "Switch V2 segment format to streaming layout\n\nChange format from [dict] -> [skip index] -> [postings] to\n[dict] -> [postings] -> [skip index]. This enables single-pass\nstreaming writes instead of 9 passes during segment creation.\n\nThe new format writes postings immediately after dict entries,\naccumulating skip index entries in memory, then writes the skip\nindex at the end. Dict entries are updated with correct offsets\nafter all postings are written.\n\nThis addresses ~30% performance regression seen in segment merge\nbenchmarks by eliminating multiple passes over the data.",
+          "timestamp": "2025-12-21T02:14:15Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/4a3fe86f16b7ba2ec78317f38debaa376b7e70a1"
+        },
+        "date": 1766283734578,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 227.461,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 2.779,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 3.771,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 3.077,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 2.849,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 2.102,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 3.72,
             "unit": "ms"
           },
           {
