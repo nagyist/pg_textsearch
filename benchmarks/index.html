@@ -106,6 +106,20 @@
             });
         }
 
+        function formatDateTime(timestamp) {
+            const d = new Date(timestamp);
+            const date = d.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: '2-digit'
+            });
+            const time = d.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+            return `${date} ${time}`;
+        }
+
         function formatCommit(hash) {
             return hash ? hash.substring(0, 7) : '';
         }
@@ -176,10 +190,10 @@
                             callbacks: {
                                 title: (items) => {
                                     const item = items[0];
-                                    const date = formatDate(item.raw.date);
+                                    const dateTime = formatDateTime(item.raw.date);
                                     const commit = formatCommit(item.raw.commit);
                                     const branch = getBranch(item.raw.commit);
-                                    return `${date} (${commit}) [${branch}]`;
+                                    return `${dateTime} (${commit}) [${branch}]`;
                                 },
                                 label: (item) => {
                                     return `${item.raw.y.toFixed(2)} ${unit}`;
