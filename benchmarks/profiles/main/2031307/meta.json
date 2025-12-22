@@ -1,0 +1,8 @@
+{
+  "sha": "2031307",
+  "full_sha": "20313076f2f43cab3f1a36be0f2805fea22bcf83",
+  "branch": "main",
+  "date": "2025-12-22T20:09:21Z",
+  "message": "Style benchmark graph points by branch type (#84)",
+  "dataset": "MS MARCO full"
+}
