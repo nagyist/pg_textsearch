@@ -2,7 +2,7 @@
 
 **Status**: Draft for review
 **Author**: Todd J. Green @ Tiger Data
-**Last updated**: 2025-12-16
+**Last updated**: 2025-12-19
 
 ---
 
@@ -310,10 +310,20 @@ Skip Index Entry (16 bytes per block):
 │ reserved: 3 bytes    - Future use                      │
 └────────────────────────────────────────────────────────┘
 
-Posting Block Data (variable size, at posting_offset):
+Posting Block Data - Uncompressed (8 bytes per posting):
+┌────────────────────────────────────────────────────────┐
+│ TpBlockPosting[doc_count]:                             │
+│   doc_id: u32      - Segment-local document ID         │
+│   frequency: u16   - Term frequency in document        │
+│   fieldnorm: u8    - Quantized document length         │
+│   reserved: u8     - Padding for alignment             │
+└────────────────────────────────────────────────────────┘
+
+Posting Block Data - Compressed (variable size):
 ┌────────────────────────────────────────────────────────┐
 │ [doc_id deltas...][frequencies...]                     │
 │ (compressed with FOR/PFOR, see Phase 3)                │
+│ (fieldnorms in separate table, not inline)             │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -334,29 +344,34 @@ blocks, then only decompress posting data for blocks that pass the threshold.
 ┌─────────────────────────────────────────────────────────┐
 │ Segment Header                                          │
 ├─────────────────────────────────────────────────────────┤
-│ Term Dictionary (on-disk hash table)                    │
-│   - term -> (skip_index_offset, doc_freq, block_count)  │
-│   - O(1) lookup via linear probing (see design below)   │
+│ Term Dictionary                                         │
+│   - String pool (term text)                             │
+│   - Dict entries: skip_index_offset, block_count, df    │
 ├─────────────────────────────────────────────────────────┤
-│ Doc ID → CTID Mapping (6 bytes per doc)                 │
-│   - Maps segment-local doc IDs back to heap tuples      │
+│ Posting Blocks (written first for streaming)            │
+│   - 8 bytes per posting (uncompressed)                  │
+│   - See "Fieldnorm Storage" below for format details    │
 ├─────────────────────────────────────────────────────────┤
 │ Skip Index (per-term arrays of block headers)           │
 │   - 16 bytes per block, enables binary search           │
-│   - Frequently accessed during BMW, benefits from cache │
+│   - Written after postings (offsets now known)          │
 ├─────────────────────────────────────────────────────────┤
-│ Posting Blocks (compressed posting data)                │
-│   - Variable-size, accessed only when block passes      │
+│ Fieldnorm Table                                         │
+│   - 1 byte per doc, quantized document lengths          │
 ├─────────────────────────────────────────────────────────┤
-│ Fieldnorm Table (1 byte per doc)                        │
-│   - Quantized document lengths for BM25                 │
-│   - Shared across all terms                             │
+│ Doc ID → CTID Mapping (6 bytes per doc)                 │
+│   - Maps segment-local doc IDs back to heap tuples      │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: Separating skip index from posting data improves cache
-behavior. During BMW, we frequently access skip entries but rarely decompress
-blocks.
+**Key insight**: The layout `[postings] → [skip index]` enables single-pass
+streaming writes. We write postings while tracking offsets and block stats,
+then write skip entries with known offsets. This eliminates multiple passes
+over the data that were required when skip index preceded postings.
+
+**Cache behavior**: During BMW queries, we scan skip entries to find candidate
+blocks. Since skip entries are small (16 bytes per 128 docs) and accessed
+sequentially, they cache well regardless of physical position.
 
 #### 1.3 Fieldnorm Quantization
 
@@ -366,14 +381,9 @@ log-scale mapping. This:
 - Enables compact block-max metadata
 - Has negligible impact on ranking quality
 
-**Storage**: Fieldnorms are stored **per-segment** in a dedicated section (see
-segment layout above). Each segment is self-contained with its own fieldnorm
-table. This matches Lucene's design where norms are stored in per-segment .nvd
-files. See [Lucene80NormsFormat](https://lucene.apache.org/core/8_0_0/core/org/apache/lucene/codecs/lucene80/Lucene80NormsFormat.html).
-
-We might as well use Lucene's quantization scheme (SmallFloat.intToByte4). Both
-Lucene and Tantivy independently converged on this same approach, which is
-reasonable evidence for its effectiveness.
+We use Lucene's quantization scheme (SmallFloat.intToByte4). Both Lucene and
+Tantivy independently converged on this same approach, which is reasonable
+evidence for its effectiveness.
 
 Key properties:
 - Document lengths 0-39 stored **exactly** (covers most short documents)
@@ -400,6 +410,41 @@ uint32 decode_fieldnorm(uint8 norm_id) {
     return FIELDNORM_TABLE[norm_id];
 }
 ```
+
+#### 1.4 Fieldnorm Storage Strategy
+
+Fieldnorm storage differs between uncompressed and compressed posting formats
+due to a space/performance tradeoff:
+
+**Uncompressed format (V2)**: Fieldnorms are stored **inline** in each posting
+entry. The `TpBlockPosting` structure has 2 bytes of padding for alignment,
+which can hold the 1-byte fieldnorm at zero additional cost:
+
+```c
+typedef struct TpBlockPosting {
+    uint32 doc_id;      // 4 bytes - segment-local document ID
+    uint16 frequency;   // 2 bytes - term frequency
+    uint8  fieldnorm;   // 1 byte  - quantized document length
+    uint8  reserved;    // 1 byte  - padding for alignment
+} TpBlockPosting;       // 8 bytes total
+```
+
+This eliminates per-posting fieldnorm lookups entirely, which is important
+because we have observed high overhead from fieldnorm lookups in a separate
+table. Each lookup requires a buffer manager round-trip (hash lookup, pin/unpin,
+LWLock acquire/release), adding ~300-500ns per posting even when pages are
+cached in shared_buffers. For queries touching millions of postings, this
+overhead dominates query time.
+
+**Compressed format (future)**: Inline storage is not viable because fieldnorms
+are per-document, not per-posting. A document appearing in 100 posting lists
+would have its fieldnorm stored 100 times, inflating posting data by 40-80%.
+Instead, compressed formats use a **separate fieldnorm table** (1 byte per
+document) with a caching scheme to amortize buffer manager overhead.
+
+The skip index already stores `block_max_norm` (the fieldnorm of the
+highest-scoring document in each block), so BMW block-skipping decisions don't
+require per-posting fieldnorm access—only scoring of candidate documents does.
 
 ---
 ### Phase 2: Block-Based Query Executor
@@ -672,35 +717,34 @@ carrying compatibility code for formats that may never see production use.
 
 ## Implementation Roadmap
 
-### v0.0.4: Block Storage Foundation
-- [ ] Fixed-size posting blocks (128 docs)
-- [ ] Block headers with last_doc_id, doc_count
-- [ ] Skip index structure
-- [ ] Segment format v2
-- [ ] Basic block-aware seek operation
-- [ ] Fieldnorm quantization table
+### v0.2.0: Block Storage Foundation (in progress)
+- [x] Fixed-size posting blocks (128 docs)
+- [x] Block headers with last_doc_id, doc_count, block_max_tf, block_max_norm
+- [x] Skip index structure (TpSkipEntry, 16 bytes per block)
+- [x] Segment format V2 with block-based posting storage
+- [x] Fieldnorm quantization table (Lucene SmallFloat encoding)
+- [x] Doc ID mapping (segment-local u32 IDs, CTID map for heap lookup)
+- [x] Index build optimization: direct mapping arrays for merge path
+- [x] Index build optimization: binary search for initial segment writes
+- [ ] Query-time block-aware seek operation
 
-### v0.0.5: Block-Based Query Executor
-- [ ] Block max score storage (max_tf, fieldnorm_id)
+### v0.3.0: Block-Based Query Executor
 - [ ] Block max score computation at query time
 - [ ] Query executor (WAND or MAXSCORE based on benchmarks)
 - [ ] Single-term optimization path
 - [ ] Threshold-based block skipping
 - [ ] Benchmarks comparing old vs new query path
 
-### v0.0.6: Compression
+### v0.4.0: Compression
 - [ ] Delta encoding for doc IDs
-- [ ] FOR encoding implementation
-- [ ] PFOR encoding for outlier blocks
-- [ ] VInt fallback for last block
+- [ ] FOR/PFOR encoding for posting blocks
 - [ ] Frequency compression
-- [ ] Decode benchmarks (scalar first, SIMD later)
+- [ ] Decode benchmarks
 
-### v0.0.7: Polish
-- [ ] Multi-level skip list (optional, for very long lists)
-- [ ] Segment-level pruning
-- [ ] Roaring bitmaps for deleted docs
+### v1.0.0: Production Ready (Target: Feb 2025)
 - [ ] Performance tuning based on benchmarks
+- [ ] Multi-level skip list (optional, for very long lists)
+- [ ] Roaring bitmaps for deleted docs (optional)
 
 ---
 

@@ -11,27 +11,38 @@
 | v0.0.5 | Dec 2025 | Segment infrastructure, auto-spill, hierarchical merging |
 | v0.1.0 | Dec 2025 | First open-source release, implicit index resolution, partitioned tables |
 
-## Current (v0.1.1-dev)
+## Current (v0.2.0-dev)
 
-Development version targeting optimizations.
+Block storage foundation for query optimizations.
+
+- **V2 segment format**: Block-based posting storage (128 docs/block)
+- **Skip index**: Per-block metadata (last_doc_id, max_tf, max_fieldnorm)
+- **Doc ID mapping**: Compact 4-byte segment-local IDs instead of 6-byte CTIDs
+- **Fieldnorm quantization**: 1-byte encoded document lengths
+- **Index build optimizations**: Binary search and direct mapping for CTID lookups
 
 ## Future
 
-### v0.1.x - Optimizations
+### v0.3.0 - Query Optimizations
 
-Performance and space efficiency improvements.
+Query-time performance improvements building on block storage.
 
-- **Compression**: Delta encoding for posting lists, bitpacking
-- **Skip lists**: Fast intersection for multi-term queries
-- **Block-Max WAND**: Early termination for top-k queries
-- **Background worker**: Async segment merging
+- **Block-Max WAND/MAXSCORE**: Early termination for top-k queries
+- **Threshold-based block skipping**: Skip blocks that can't contribute to top-k
 
-### v1.0 - Production Ready
+### v0.4.0 - Compression
+
+Reduce storage footprint via posting list compression.
+
+- **Delta encoding**: Compact doc ID storage
+- **FOR/PFOR**: Frame-of-reference encoding for posting blocks
+
+### v1.0.0 - Production Ready (Target: Feb 2025)
 
 First production-quality release.
 
-- Bug fixes, performance tuning, polish
-- Benchmark validation
+- Performance tuning and polish
+- Benchmark validation on large datasets
 - Backwards compatibility commitments begin
 
 ### Future (Post v1.0)

@@ -1,11 +1,11 @@
 EXTENSION = pg_textsearch
-DATA = sql/pg_textsearch--0.1.1-dev.sql \
+DATA = sql/pg_textsearch--0.2.0-dev.sql \
        sql/pg_textsearch--0.0.1--0.0.2.sql \
        sql/pg_textsearch--0.0.2--0.0.3.sql \
        sql/pg_textsearch--0.0.3--0.0.4.sql \
        sql/pg_textsearch--0.0.4--0.0.5.sql \
        sql/pg_textsearch--0.0.5--0.1.0.sql \
-       sql/pg_textsearch--0.1.0--0.1.1-dev.sql
+       sql/pg_textsearch--0.1.0--0.2.0-dev.sql
 
 # Source files
 # Full build - debugging initialization crash
@@ -27,6 +27,7 @@ OBJS = \
 	src/segment/dictionary.o \
 	src/segment/segment_query.o \
 	src/segment/segment_merge.o \
+	src/segment/docmap.o \
 	src/planner.o
 
 # Shared library target
