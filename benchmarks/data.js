@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766384450976,
+  "lastUpdate": 1766431550646,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1534,6 +1534,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 3.69,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "15b8df351172d0321c2ca4035afcf211b4861f96",
+          "message": "Implement V2 segment format with block storage for BMW optimization (#81)\n\n## Summary\n- Implements Phase 1 of block storage optimization with V2 segment\nformat\n- Block-based posting storage (128 docs/block) with skip index for\nfuture BMW optimization\n- Fieldnorm table using Lucene SmallFloat encoding (1 byte per doc)\n- Segment-local document IDs with CTID map for heap tuple lookup\n- All segment writes switched to V2 format (breaking change, metapage\nversion 5)\n\n## Compatibility\n- **Read**: Supports both V1 and V2 segments (query code branches on\n`header->version`)\n- **Write**: V2 only - all new segments use V2 format\n- **Upgrade path**: Existing indexes must be rebuilt (standard for\npre-1.0 releases)\n\n## Key Changes\n- **New files**: `docmap.c/h` (CTID mapping), `fieldnorm.h` (length\nquantization)\n- **segment_merge.c**: Complete rewrite to read V2 sources and write V2\noutput\n- **segment_query.c**: V2 query iterator with block-based iteration\n- **segment.c**: V2 writer and dump function updates\n\n## Format Details\n- `TpBlockPosting` (8 bytes): doc_id + frequency (down from 14-byte\nTpSegmentPosting)\n- `TpSkipEntry` (16 bytes): per-block statistics for BMW block skipping\n- `TpDictEntryV2` (12 bytes): skip_index_offset + block_count + doc_freq\n\n## Configuration Changes\n- **Memtable spill threshold**: Bumped from 800K to 32M posting entries\n(~1M docs/segment)\n- **Benchmark config**: `segments_per_level = 16` for fewer merges\nduring benchmarking\n- **Segment statistics**: Added `bm25_summarize_index()` calls to\nbenchmark load scripts\n\n## Testing\n- All 29 regression tests pass\n- Merge, segment, and scoring tests validate V2 format correctness",
+          "timestamp": "2025-12-22T08:47:53Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/15b8df351172d0321c2ca4035afcf211b4861f96"
+        },
+        "date": 1766431550165,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 250.28,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 3.159,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 4.225,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 3.613,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 3.283,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 2.357,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 4.05,
             "unit": "ms"
           },
           {
