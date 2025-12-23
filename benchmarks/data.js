@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766471006201,
+  "lastUpdate": 1766471007519,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -4058,6 +4058,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Rare Term Query",
             "value": 6.297,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "20313076f2f43cab3f1a36be0f2805fea22bcf83",
+          "message": "Style benchmark graph points by branch type (#84)\n\n## Summary\n- Main branch benchmark runs shown as filled circles (●)\n- Feature branch runs shown as X markers (✕) with white fill\n- Tooltip displays branch name alongside commit and date info\n- Added visual legend to dashboard header\n- Workflow now tracks branch info in `branch_info.js` on gh-pages (keeps\nlast 500 entries)\n\n## Testing\n- Run benchmark workflow on main and a feature branch\n- Verify points display with different styles on the dashboard\n- Hover over points to confirm branch name appears in tooltip",
+          "timestamp": "2025-12-22T19:49:33Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/20313076f2f43cab3f1a36be0f2805fea22bcf83"
+        },
+        "date": 1766471007200,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 514923.691,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 13.206,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 47.574,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 43.51,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.032,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 8.395,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 98.34,
             "unit": "ms"
           },
           {
