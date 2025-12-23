@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766504491090,
+  "lastUpdate": 1766506758995,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -4177,6 +4177,63 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Rare Term Query",
             "value": 6.272,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "36a3da2fec00a48fa61e27f869e62d49e8304174",
+          "message": "Use zero-copy for per-posting CTID lookups\n\nThe previous commit added zero-copy for block loading, but CTID lookups\nwere still using tp_segment_read for every posting (when segment has\n>100K docs). Profile showed this was still ~12% of CPU time.\n\nNow use tp_segment_get_direct for CTID lookups too, with fallback to\ncopy only when CTID spans page boundary (rare - 6 byte entries).\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2025-12-23T16:05:15Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/36a3da2fec00a48fa61e27f869e62d49e8304174"
+        },
+        "date": 1766506758609,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 586914.126,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 13.768,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 52.936,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 48.345,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.042,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 6.316,
             "unit": "ms"
           },
           {
