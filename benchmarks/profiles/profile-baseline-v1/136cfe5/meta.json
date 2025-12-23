@@ -1,0 +1,8 @@
+{
+  "sha": "136cfe5",
+  "full_sha": "136cfe536bf7b68682c905dead9bf2d9bc5f2002",
+  "branch": "profile-baseline-v1",
+  "date": "2025-12-23T00:12:11Z",
+  "message": "Add profiling job with improved query coverage",
+  "dataset": "MS MARCO full"
+}
