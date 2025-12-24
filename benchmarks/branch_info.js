@@ -57,5 +57,6 @@ window.BRANCH_INFO = {
   "01701eb0bca20c232aca483c691e0512e9a266ef": "work2",
   "cc271d6955305020755edeb8e402b9f3f14aca0f": "work2",
   "8c86fccb2939836185fc141daf2fa762a09fb9fb": "work2",
-  "2e60e1e605ae9ff733796267fc162d62f3d07117": "work2"
+  "2e60e1e605ae9ff733796267fc162d62f3d07117": "work2",
+  "a422e579cddceefaef6bfbf365f2939457ab38b9": "work2"
 };
