@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766549139674,
+  "lastUpdate": 1766549140868,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -4601,6 +4601,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Index Size",
             "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "2b9fe6f74c1bcc93bb69800729a8e1a207e7e60a",
+          "message": "Add CTID tiebreaker for deterministic sort ordering\n\nWhen documents have equal BM25 scores, sort by CTID ascending to ensure\ndeterministic, reproducible query results. This makes the partial\nquicksort stable for equal-scored documents.\n\nUpdate limits test expected output to reflect the new deterministic\nordering.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2025-12-24T04:02:12Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/2b9fe6f74c1bcc93bb69800729a8e1a207e7e60a"
+        },
+        "date": 1766549140611,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 567824.928,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 20.836,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 31.665,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 43.053,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.039,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 32.042,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 80.24,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.13,
             "unit": "MB"
           }
         ]
