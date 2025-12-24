@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766549140868,
+  "lastUpdate": 1766549142133,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -6142,6 +6142,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
             "value": 2.49,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "2b9fe6f74c1bcc93bb69800729a8e1a207e7e60a",
+          "message": "Add CTID tiebreaker for deterministic sort ordering\n\nWhen documents have equal BM25 scores, sort by CTID ascending to ensure\ndeterministic, reproducible query results. This makes the partial\nquicksort stable for equal-scored documents.\n\nUpdate limits test expected output to reflect the new deterministic\nordering.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2025-12-24T04:02:12Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/2b9fe6f74c1bcc93bb69800729a8e1a207e7e60a"
+        },
+        "date": 1766549141859,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 19805.027,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.822,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 3.703,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.863,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 5.156,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 5.664,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
+            "value": 2.436,
             "unit": "ms"
           },
           {
