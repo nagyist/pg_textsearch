@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766552228238,
+  "lastUpdate": 1766552229574,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -6514,6 +6514,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
             "value": 2.566,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "a2d302bf43d00d0472adb696472575edcdb38318",
+          "message": "Fix expected test output for deterministic CTID ordering",
+          "timestamp": "2025-12-24T04:45:20Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/a2d302bf43d00d0472adb696472575edcdb38318"
+        },
+        "date": 1766552229236,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 18399.145,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.53,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 3.164,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.982,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 5.171,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 4.421,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
+            "value": 2.467,
             "unit": "ms"
           },
           {
