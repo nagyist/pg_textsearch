@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766632082829,
+  "lastUpdate": 1766643733240,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -2030,6 +2030,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 4.09,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "20313076f2f43cab3f1a36be0f2805fea22bcf83",
+          "message": "Style benchmark graph points by branch type (#84)\n\n## Summary\n- Main branch benchmark runs shown as filled circles (●)\n- Feature branch runs shown as X markers (✕) with white fill\n- Tooltip displays branch name alongside commit and date info\n- Added visual legend to dashboard header\n- Workflow now tracks branch info in `branch_info.js` on gh-pages (keeps\nlast 500 entries)\n\n## Testing\n- Run benchmark workflow on main and a feature branch\n- Verify points display with different styles on the dashboard\n- Hover over points to confirm branch name appears in tooltip",
+          "timestamp": "2025-12-22T19:49:33Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/20313076f2f43cab3f1a36be0f2805fea22bcf83"
+        },
+        "date": 1766643732174,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 262.517,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 3.088,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 4.22,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 3.429,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 3.146,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 2.349,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 4.12,
             "unit": "ms"
           },
           {
