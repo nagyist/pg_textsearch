@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766632080350,
+  "lastUpdate": 1766632082829,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -6881,6 +6881,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Rare Term Query",
             "value": 9.156,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "014207fbe339343c2329b04fa32a7527c051a985",
+          "message": "Fix hash function to use all 8 bytes of CTID key\n\nThe FNV-1a hash was only processing bytes 0-5 (bits 0-47), missing\nthe high 16 bits of block number (bits 48-63). For tables > 512MB,\nthis would cause hash collisions for CTIDs differing only in those\nbits.\n\nAlso fixed incorrect comment claiming 24-byte entry size (it's 16).",
+          "timestamp": "2025-12-24T07:33:50Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/014207fbe339343c2329b04fa32a7527c051a985"
+        },
+        "date": 1766632082190,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 19269.883,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.595,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 3.056,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.899,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 5.082,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 4.459,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
+            "value": 2.362,
             "unit": "ms"
           },
           {
