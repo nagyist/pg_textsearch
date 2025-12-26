@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766715025078,
+  "lastUpdate": 1766715026589,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -7248,6 +7248,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Rare Term Query",
             "value": 9.784,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "53594e02f7d43fb420652bc403d6a440294f5ea0",
+          "message": "Eliminate duplicate score computation with planner hook\n\nAdd a planner hook that replaces resjunk ORDER BY score expressions\nwith a cheap stub function that returns the cached score from the\nindex scan. This avoids computing BM25 scores twice (once in the\nindex scan, once in expression evaluation).\n\n- Add tp_cached_score infrastructure in index.c\n- Add bm25_get_current_score() stub function in query.c\n- Add planner hook to detect BM25 IndexScan and replace expressions\n- Only replace when BM25 IndexScan is present (safe for SeqScan fallback)\n\nAlso add fieldnorm_discrepancy test documenting score corruption\nafter L0->L1 merge (tracked in issue #93).",
+          "timestamp": "2025-12-26T01:50:06Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/53594e02f7d43fb420652bc403d6a440294f5ea0"
+        },
+        "date": 1766715026335,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 18841.418,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.561,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 3.016,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.756,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 4.89,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 4.317,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
+            "value": 2.278,
             "unit": "ms"
           },
           {
