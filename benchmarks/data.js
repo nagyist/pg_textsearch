@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766715023890,
+  "lastUpdate": 1766715025078,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -5340,6 +5340,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
             "value": 106.05,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "53594e02f7d43fb420652bc403d6a440294f5ea0",
+          "message": "Eliminate duplicate score computation with planner hook\n\nAdd a planner hook that replaces resjunk ORDER BY score expressions\nwith a cheap stub function that returns the cached score from the\nindex scan. This avoids computing BM25 scores twice (once in the\nindex scan, once in expression evaluation).\n\n- Add tp_cached_score infrastructure in index.c\n- Add bm25_get_current_score() stub function in query.c\n- Add planner hook to detect BM25 IndexScan and replace expressions\n- Only replace when BM25 IndexScan is present (safe for SeqScan fallback)\n\nAlso add fieldnorm_discrepancy test documenting score corruption\nafter L0->L1 merge (tracked in issue #93).",
+          "timestamp": "2025-12-26T01:50:06Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/53594e02f7d43fb420652bc403d6a440294f5ea0"
+        },
+        "date": 1766715024829,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 517897.548,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 12.582,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 18.134,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 23.362,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.077,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 15.616,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 37.8,
             "unit": "ms"
           },
           {
