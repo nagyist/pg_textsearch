@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766722386238,
+  "lastUpdate": 1766722388236,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -7434,6 +7434,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
             "value": 2.278,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "979749163401fa76b29a83e8cb49953d5f1f2076",
+          "message": "Revert custom hash table, use PostgreSQL dynahash\n\nRevert commits 014207f and a422e57 that introduced a custom\nlinear-probing hash table. Profiling showed tp_doc_score_table_insert\ntaking ~50% of query time, and the custom FNV-1a hash was doing\n8 multiplies per insert.\n\nPostgreSQL's built-in dynahash is well-tested and optimized.\nStick with it unless we have compelling evidence it's a bottleneck.",
+          "timestamp": "2025-12-26T02:51:16Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/979749163401fa76b29a83e8cb49953d5f1f2076"
+        },
+        "date": 1766722387521,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 19071.963,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.649,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 4.136,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.892,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 4.904,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 5.207,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query (with score)",
+            "value": 2.407,
             "unit": "ms"
           },
           {
