@@ -329,24 +329,24 @@ SELECT validate_bm25_scoring(
 --   Large IDF = ln(1 + (10 - 2 + 0.5) / (2 + 0.5)) = ln(1 + 8.5/2.5) = ln(4.4) ≈ 1.48
 --
 -- This demonstrates partition-local statistics in action:
--- Show actual scores from small partition
+-- Show actual scores from small partition (only matching documents)
 SELECT 'small' as partition, content,
        ROUND((content <@> to_bm25query('database', 'partition_small_content_idx'))::numeric, 4) as score
 FROM partition_small
-WHERE content <@> to_bm25query('database', 'partition_small_content_idx') < 0
-ORDER BY score;
+ORDER BY content <@> to_bm25query('database', 'partition_small_content_idx')
+LIMIT 10;
  partition |          content           |  score  
 -----------+----------------------------+---------
  small     | database search query      | -0.4901
  small     | postgresql database system | -0.4901
 (2 rows)
 
--- Show actual scores from large partition
+-- Show actual scores from large partition (only matching documents)
 SELECT 'large' as partition, content,
        ROUND((content <@> to_bm25query('database', 'partition_large_content_idx'))::numeric, 4) as score
 FROM partition_large
-WHERE content <@> to_bm25query('database', 'partition_large_content_idx') < 0
-ORDER BY score;
+ORDER BY content <@> to_bm25query('database', 'partition_large_content_idx')
+LIMIT 10;
  partition |           content           |  score  
 -----------+-----------------------------+---------
  large     | database management system  | -1.4816

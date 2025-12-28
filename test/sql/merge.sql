@@ -5,9 +5,6 @@
 -- 1. Multiple L0 segments
 -- 2. L0 -> L1 merge triggered by segments_per_level = 2
 -- 3. Queries across multiple segment levels (L0, L1)
---
--- Known issue: Query code only searches L0 segments (level_heads[0]).
--- After merge, data in L1 won't be found until this is fixed.
 
 CREATE EXTENSION IF NOT EXISTS pg_textsearch;
 
@@ -41,16 +38,22 @@ INSERT INTO merge_test (content) VALUES ('world peace harmony');
 
 -- Verify data is queryable in memtable
 SELECT 'Phase 1: memtable only' AS phase;
-SELECT COUNT(*) AS count_before_spill FROM merge_test
-WHERE content <@> to_bm25query('hello', 'merge_test_idx') < 0;
+SELECT COUNT(*) AS count_before_spill FROM (
+    SELECT id FROM merge_test
+    ORDER BY content <@> to_bm25query('hello', 'merge_test_idx')
+    LIMIT 100
+) t;
 
 -- First spill creates segment 1 in L0
 SELECT bm25_spill_index('merge_test_idx') IS NOT NULL AS first_spill;
 
 -- Verify data is still queryable from L0 segment
 SELECT 'Phase 1b: after first spill (1 segment in L0)' AS phase;
-SELECT COUNT(*) AS hello_count_after_first_spill FROM merge_test
-WHERE content <@> to_bm25query('hello', 'merge_test_idx') < 0;
+SELECT COUNT(*) AS hello_count_after_first_spill FROM (
+    SELECT id FROM merge_test
+    ORDER BY content <@> to_bm25query('hello', 'merge_test_idx')
+    LIMIT 100
+) t;
 
 --------------------------------------------------------------------------------
 -- Phase 2: Second batch - triggers L0->L1 merge (segments_per_level=2)
@@ -70,12 +73,18 @@ SELECT bm25_spill_index('merge_test_idx') IS NOT NULL AS second_spill;
 SELECT 'Phase 2: after second spill + merge (L0 empty, 1 segment in L1)' AS phase;
 
 -- Should find 2 documents with 'hello' (both in L1 merged segment)
-SELECT COUNT(*) AS hello_count_after_merge FROM merge_test
-WHERE content <@> to_bm25query('hello', 'merge_test_idx') < 0;
+SELECT COUNT(*) AS hello_count_after_merge FROM (
+    SELECT id FROM merge_test
+    ORDER BY content <@> to_bm25query('hello', 'merge_test_idx')
+    LIMIT 100
+) t;
 
 -- Should find 4 documents with 'database' (all in L1 merged segment)
-SELECT COUNT(*) AS database_count_after_merge FROM merge_test
-WHERE content <@> to_bm25query('database', 'merge_test_idx') < 0;
+SELECT COUNT(*) AS database_count_after_merge FROM (
+    SELECT id FROM merge_test
+    ORDER BY content <@> to_bm25query('database', 'merge_test_idx')
+    LIMIT 100
+) t;
 
 -- Validate BM25 scoring is correct across L1 data
 SELECT validate_bm25_scoring('merge_test', 'content', 'merge_test_idx',
@@ -98,12 +107,18 @@ INSERT INTO merge_test (content) VALUES ('database transaction log');
 SELECT 'Phase 3: post-merge inserts (memtable + 1 L1 segment)' AS phase;
 
 -- Should find 3 documents with 'hello' (2 in L1, 1 in memtable)
-SELECT COUNT(*) AS hello_count_with_new_inserts FROM merge_test
-WHERE content <@> to_bm25query('hello', 'merge_test_idx') < 0;
+SELECT COUNT(*) AS hello_count_with_new_inserts FROM (
+    SELECT id FROM merge_test
+    ORDER BY content <@> to_bm25query('hello', 'merge_test_idx')
+    LIMIT 100
+) t;
 
 -- Should find 5 documents with 'database' (4 in L1, 1 in memtable)
-SELECT COUNT(*) AS database_count_with_new_inserts FROM merge_test
-WHERE content <@> to_bm25query('database', 'merge_test_idx') < 0;
+SELECT COUNT(*) AS database_count_with_new_inserts FROM (
+    SELECT id FROM merge_test
+    ORDER BY content <@> to_bm25query('database', 'merge_test_idx')
+    LIMIT 100
+) t;
 
 -- Validate BM25 scoring with mixed sources (memtable + L1 segment)
 SELECT validate_bm25_scoring('merge_test', 'content', 'merge_test_idx',
@@ -125,7 +140,6 @@ SELECT id, content,
        ROUND((content <@> to_bm25query('database', 'merge_test_idx'))::numeric, 4)
        AS database_score
 FROM merge_test
-WHERE content <@> to_bm25query('database', 'merge_test_idx') < 0
 ORDER BY content <@> to_bm25query('database', 'merge_test_idx'), id;
 
 -- Cleanup
