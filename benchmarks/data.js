@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766989160185,
+  "lastUpdate": 1766989161612,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -6134,6 +6134,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Avg Query Latency with Score",
             "value": 53.66,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "058dc902ac7802f7a6cd6a62c7d3aaf89a541b8f",
+          "message": "Update v1.0.0 target date to Feb 2026 (#97)\n\n## Summary\n- Updates the v1.0.0 release target from Feb 2025 to Feb 2026\n\nFixes #92",
+          "timestamp": "2025-12-28T20:03:50Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/058dc902ac7802f7a6cd6a62c7d3aaf89a541b8f"
+        },
+        "date": 1766989161267,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 477028.767,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 11.279,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 22.903,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 20.693,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.024,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 8.945,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 40.73,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query with Score",
+            "value": 19.2,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query with Score",
+            "value": 31.268,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query with Score",
+            "value": 36.172,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query with Score",
+            "value": 23.993,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency with Score",
+            "value": 59.68,
             "unit": "ms"
           },
           {
