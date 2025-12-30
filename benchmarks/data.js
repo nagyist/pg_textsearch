@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767075646514,
+  "lastUpdate": 1767121194640,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -2526,6 +2526,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 0.23,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "a5ab4556207127508b8a9502b4a7afc71c389a04",
+          "message": "Add competitive benchmarking infrastructure\n\nCompare pg_textsearch against ParadeDB, Tantivy, and OpenSearch:\n\n- benchmarks/engines/paradedb/ - pg_search extension benchmark\n- benchmarks/engines/tantivy/ - tantivy-py Python benchmark\n- benchmarks/engines/opensearch/ - Docker + opensearch-py benchmark\n- benchmarks/compare_engines.sh - unified runner script\n- benchmarks/compare_results.py - results aggregation\n- .github/workflows/competitive-benchmark.yml - manual CI workflow\n\nResults are stored as raw artifacts only (not published to gh-pages).\nWorkflow is marked as WIP/experimental.\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)",
+          "timestamp": "2025-12-30T18:54:30Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/a5ab4556207127508b8a9502b4a7afc71c389a04"
+        },
+        "date": 1767121193418,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 212.123,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 0.097,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 0.147,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 0.15,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 0.131,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 0.04,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 0.21,
             "unit": "ms"
           },
           {
