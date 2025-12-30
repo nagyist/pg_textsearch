@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767121196868,
+  "lastUpdate": 1767121198927,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -8727,6 +8727,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Rare Term Query with Score",
             "value": 4.054,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "a5ab4556207127508b8a9502b4a7afc71c389a04",
+          "message": "Add competitive benchmarking infrastructure\n\nCompare pg_textsearch against ParadeDB, Tantivy, and OpenSearch:\n\n- benchmarks/engines/paradedb/ - pg_search extension benchmark\n- benchmarks/engines/tantivy/ - tantivy-py Python benchmark\n- benchmarks/engines/opensearch/ - Docker + opensearch-py benchmark\n- benchmarks/compare_engines.sh - unified runner script\n- benchmarks/compare_results.py - results aggregation\n- .github/workflows/competitive-benchmark.yml - manual CI workflow\n\nResults are stored as raw artifacts only (not published to gh-pages).\nWorkflow is marked as WIP/experimental.\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)",
+          "timestamp": "2025-12-30T18:54:30Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/a5ab4556207127508b8a9502b4a7afc71c389a04"
+        },
+        "date": 1767121198240,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 17728.923,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.562,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 3.281,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 2.228,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 4.829,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 5.87,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query with Score",
+            "value": 3.211,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query with Score",
+            "value": 4.399,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query with Score",
+            "value": 3.336,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query with Score",
+            "value": 3.839,
             "unit": "ms"
           },
           {
