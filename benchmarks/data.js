@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767121194640,
+  "lastUpdate": 1767121196868,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -8732,6 +8732,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Size",
             "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      }
+    ],
+    "msmarco-realqueries Benchmarks": [
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "a5ab4556207127508b8a9502b4a7afc71c389a04",
+          "message": "Add competitive benchmarking infrastructure\n\nCompare pg_textsearch against ParadeDB, Tantivy, and OpenSearch:\n\n- benchmarks/engines/paradedb/ - pg_search extension benchmark\n- benchmarks/engines/tantivy/ - tantivy-py Python benchmark\n- benchmarks/engines/opensearch/ - Docker + opensearch-py benchmark\n- benchmarks/compare_engines.sh - unified runner script\n- benchmarks/compare_results.py - results aggregation\n- .github/workflows/competitive-benchmark.yml - manual CI workflow\n\nResults are stored as raw artifacts only (not published to gh-pages).\nWorkflow is marked as WIP/experimental.\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)",
+          "timestamp": "2025-12-30T18:54:30Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/a5ab4556207127508b8a9502b4a7afc71c389a04"
+        },
+        "date": 1767121196195,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco-realqueries - Index Build Time",
+            "value": 212.123,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries - Index Size",
+            "value": 0.02,
             "unit": "MB"
           }
         ]
