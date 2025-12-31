@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767153513456,
+  "lastUpdate": 1767162053680,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -2588,6 +2588,68 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
             "value": 0.21,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "SteveLauC",
+            "username": "SteveLauC",
+            "email": "stevelauc@outlook.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "6b3ffdb14b978bf175d1a7ce6891dfd7f3702b46",
+          "message": "chore: fix make test and override pgxs installcheck (#91)\n\nThis commit:\n\n1. Adds the missing `test` target. It is mentioned in `make help` but\nhas not been defined, when I run it locally, I see this:\n   ```sh\n   $ make test\n   make: Nothing to be done for `test'.\n   ```\n   \n2. Makes the `installcheck` target override the one defined by pgxs.\nPreviously, we were not overriding it but appending new commands to it",
+          "timestamp": "2025-12-31T03:21:54Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/6b3ffdb14b978bf175d1a7ce6891dfd7f3702b46"
+        },
+        "date": 1767162052545,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 256.904,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Short Query (1 word)",
+            "value": 0.118,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Medium Query (3 words)",
+            "value": 0.179,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Long Query (question)",
+            "value": 0.188,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Common Term Query",
+            "value": 0.151,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Rare Term Query",
+            "value": 0.074,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Avg Query Latency (20 queries)",
+            "value": 0.26,
             "unit": "ms"
           },
           {
