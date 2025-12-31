@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767121198927,
+  "lastUpdate": 1767153512093,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -8843,6 +8843,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco-realqueries - Index Size",
             "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "65caa7a9970576322531a099ce02110524114147",
+          "message": "Fix query loading: use CSV format to avoid backslash escapes\n\nPostgreSQL text format treats trailing backslash as line continuation.\nQuery 'what is the speed of light in m.p.h.\\' was being joined with next line.\nCSV format doesn't have this issue.\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)",
+          "timestamp": "2025-12-31T03:20:36Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/65caa7a9970576322531a099ce02110524114147"
+        },
+        "date": 1767153511454,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Index Build Time",
+            "value": 5799.313,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Avg Query Latency (all queries)",
+            "value": 0.5234054385565766,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Queries Per Second",
+            "value": 1910.5647865596388,
+            "unit": "QPS"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Short Query (1-2 words)",
+            "value": 0.318,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Medium Query (3-5 words)",
+            "value": 0.357,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Long Query (6-8 words)",
+            "value": 0.545,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Very Long Query (9+ words)",
+            "value": 0.844,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - P50 Latency",
+            "value": 0.467,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - P95 Latency",
+            "value": 1.412,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - P99 Latency",
+            "value": 1.902,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - High Selectivity (rare terms)",
+            "value": 28666.231,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Low Selectivity (common terms)",
+            "value": 58924.542,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco-realqueries (99.9K docs, 101.0K queries) - Index Size",
+            "value": 27.07,
             "unit": "MB"
           }
         ]
