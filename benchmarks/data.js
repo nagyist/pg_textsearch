@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767162053680,
+  "lastUpdate": 1767162056140,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -6531,6 +6531,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (99.9K docs) - Index Size",
             "value": 27.07,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "SteveLauC",
+            "username": "SteveLauC",
+            "email": "stevelauc@outlook.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "6b3ffdb14b978bf175d1a7ce6891dfd7f3702b46",
+          "message": "chore: fix make test and override pgxs installcheck (#91)\n\nThis commit:\n\n1. Adds the missing `test` target. It is mentioned in `make help` but\nhas not been defined, when I run it locally, I see this:\n   ```sh\n   $ make test\n   make: Nothing to be done for `test'.\n   ```\n   \n2. Makes the `installcheck` target override the one defined by pgxs.\nPreviously, we were not overriding it but appending new commands to it",
+          "timestamp": "2025-12-31T03:21:54Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/6b3ffdb14b978bf175d1a7ce6891dfd7f3702b46"
+        },
+        "date": 1767162055546,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 538068.081,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 8.027,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 19.365,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 16.448,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.037,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 5.935,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 35.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query with Score",
+            "value": 13.38,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query with Score",
+            "value": 24.739,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query with Score",
+            "value": 28.437,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query with Score",
+            "value": 16.203,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency with Score",
+            "value": 50.29,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
             "unit": "MB"
           }
         ]
