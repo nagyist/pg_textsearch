@@ -2,10 +2,11 @@
  * Copyright (c) 2025 Tiger Data, Inc.
  * Licensed under the PostgreSQL License. See LICENSE for details.
  *
- * planner.c - Parse analysis hook for implicit index resolution
+ * planner/hooks.c - Parse analysis and planner hooks
  *
  * When queries use the <@> operator without an explicit index, this hook
  * identifies the column being scored and finds a suitable BM25 index.
+ * It also optimizes BM25 score expressions in the planner.
  */
 #include <postgres.h>
 
@@ -38,9 +39,9 @@
 #include <utils/rel.h>
 #include <utils/syscache.h>
 
-#include "operator.h"
-#include "planner.h"
-#include "query.h"
+#include "hooks.h"
+#include "types/query.h"
+#include "types/score.h"
 
 /* Previous hooks in chain */
 static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
@@ -610,14 +611,6 @@ make_stub_funcexpr(void)
 
 /*
  * Replace BM25 score expressions in a plan node's targetlist.
- *
- * Strategy: First find the resjunk ORDER BY expression (which the index scan
- * computes and caches). Then replace both that expression AND any identical
- * expressions in the SELECT clause with the stub function.
- *
- * This handles queries like:
- *   SELECT content <@> 'hello' AS score FROM t ORDER BY content <@> 'hello'
- * where both the SELECT and ORDER BY use the same score expression.
  */
 static void
 replace_scores_in_targetlist(List *targetlist, BM25OidCache *oids)
@@ -658,8 +651,6 @@ replace_scores_in_targetlist(List *targetlist, BM25OidCache *oids)
 
 /*
  * Check if the plan contains a BM25 IndexScan that will compute scores.
- * Only if such a scan exists should we replace resjunk expressions with the
- * stub.
  */
 static bool
 plan_has_bm25_indexscan(Plan *plan, BM25OidCache *oids)
@@ -790,17 +781,6 @@ replace_scores_in_plan(Plan *plan, BM25OidCache *oids)
 
 /*
  * Planner hook: called after standard_planner produces the plan.
- *
- * We walk the plan tree and replace BM25 score expressions with calls to
- * bm25_get_current_score(). This avoids expensive re-computation of scores
- * that were already computed by the index scan.
- *
- * The optimization applies to:
- * - Resjunk ORDER BY expressions (hidden sort keys)
- * - SELECT clause expressions that match the ORDER BY expression
- *
- * We only do this when the plan uses a BM25 IndexScan, because the stub
- * retrieves the cached score set by tp_gettuple during index scanning.
  */
 static PlannedStmt *
 tp_planner_hook(
@@ -820,8 +800,7 @@ tp_planner_hook(
 		result = standard_planner(
 				parse, query_string, cursorOptions, boundParams);
 
-	/* Only process if we have our extension's OIDs and there's a BM25 index
-	 * scan */
+	/* Only process if we have our extension's OIDs and BM25 index scan */
 	if (get_bm25_oids(&oid_cache) && result->planTree != NULL &&
 		plan_has_bm25_indexscan(result->planTree, &oid_cache))
 	{

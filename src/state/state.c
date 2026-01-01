@@ -24,15 +24,15 @@
 #include <utils/rel.h>
 #include <utils/snapmgr.h>
 
+#include "am/am.h"
 #include "constants.h"
-#include "index.h"
 #include "memtable/posting.h"
 #include "memtable/stringtable.h"
-#include "metapage.h"
-#include "registry.h"
+#include "segment/merge.h"
 #include "segment/segment.h"
-#include "segment/segment_merge.h"
-#include "state.h"
+#include "state/metapage.h"
+#include "state/registry.h"
+#include "state/state.h"
 
 /* Cache of local index states */
 static HTAB *local_state_cache = NULL;
@@ -184,45 +184,6 @@ tp_get_local_index_state(Oid index_oid)
 	}
 
 	return NULL;
-}
-
-/*
- * Release a local index state
- *
- * This detaches from the DSA area and removes the entry from the cache
- */
-void
-tp_release_local_index_state(TpLocalIndexState *local_state)
-{
-	bool found;
-	Oid	 index_oid;
-
-	if (local_state == NULL)
-		return;
-
-	/* Save index OID before accessing shared state */
-	if (local_state->shared != NULL)
-		index_oid = local_state->shared->index_oid;
-	else
-		index_oid = InvalidOid;
-
-	/* Remove from cache */
-	if (local_state_cache != NULL && OidIsValid(index_oid))
-	{
-		hash_search(local_state_cache, &index_oid, HASH_REMOVE, &found);
-	}
-
-	/*
-	 * DO NOT detach from DSA - it's the shared DSA used by all indexes!
-	 * The DSA is managed by the registry and should persist for the
-	 * lifetime of the PostgreSQL instance. Detaching here would break
-	 * other indexes that are using the same shared DSA.
-	 */
-	/* if (local_state->dsa != NULL)
-		dsa_detach(local_state->dsa); */
-
-	/* Free the local state */
-	pfree(local_state);
 }
 
 /*
@@ -423,45 +384,6 @@ tp_cleanup_index_shared_memory(Oid index_oid)
 
 	/* Unregister from global registry AFTER cleanup */
 	tp_registry_unregister(index_oid);
-}
-
-/*
- * Get local index state from cache without creating it if not found
- * Returns NULL if the index is not in the local cache
- */
-TpLocalIndexState *
-tp_get_local_index_state_if_cached(Oid index_oid)
-{
-	LocalStateCacheEntry *entry;
-	bool				  found;
-
-	/* Ensure the cache is initialized */
-	if (local_state_cache == NULL)
-		return NULL;
-
-	/* Look up in local cache */
-	entry = (LocalStateCacheEntry *)
-			hash_search(local_state_cache, &index_oid, HASH_FIND, &found);
-
-	if (!found)
-		return NULL;
-
-	return entry->local_state;
-}
-
-/*
- * Destroy a shared index state
- *
- * This is called during DROP INDEX to clean up the shared state
- */
-void
-tp_destroy_shared_index_state(TpSharedIndexState *shared_state)
-{
-	if (shared_state == NULL)
-		return;
-
-	/* Use the common cleanup function */
-	tp_cleanup_index_shared_memory(shared_state->index_oid);
 }
 
 /*
@@ -1024,7 +946,7 @@ tp_bulk_load_spill_check(void)
 		PG_END_TRY();
 
 		/* Write the segment */
-		segment_root = tp_write_segment_v2(local_state, index_rel);
+		segment_root = tp_write_segment(local_state, index_rel);
 
 		/* Clear memtable and update metapage if spill succeeded */
 		if (segment_root != InvalidBlockNumber)

@@ -16,8 +16,9 @@
 #include "common/hashfn.h"
 #include "common/hashfn_unstable.h"
 #include "memory.h"
+#include "memtable.h"
 #include "posting.h"
-#include "state.h"
+#include "state/state.h"
 #include "stringtable.h"
 
 /*
@@ -228,49 +229,6 @@ tp_string_table_insert(
 	dshash_release_lock(ht, entry);
 
 	return entry;
-}
-
-/*
- * Delete a string from the hash table
- * Returns true if found and deleted, false if not found
- */
-bool
-tp_string_table_delete(
-		dsa_area *area, dshash_table *ht, const char *str, size_t len)
-{
-	TpStringKey		   lookup_key;
-	TpStringHashEntry *entry;
-
-	Assert(area != NULL);
-	Assert(ht != NULL);
-	Assert(str != NULL);
-
-	if (len == 0)
-		return false;
-
-	/* Build lookup key */
-	lookup_key.term.str		= str;
-	lookup_key.posting_list = InvalidDsaPointer;
-
-	/* Find the entry */
-	entry = (TpStringHashEntry *)
-			dshash_find(ht, &lookup_key, true); /* exclusive lock */
-
-	if (entry)
-	{
-		/* Free the string */
-		dsa_free(area, entry->key.term.dp);
-
-		/* Free posting list */
-		tp_free_posting_list(area, entry->key.posting_list);
-
-		/* Delete entry (releases lock) */
-		dshash_delete_entry(ht, entry);
-
-		return true;
-	}
-
-	return false;
 }
 
 /*

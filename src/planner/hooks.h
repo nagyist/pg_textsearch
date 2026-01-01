@@ -2,11 +2,14 @@
  * Copyright (c) 2025 Tiger Data, Inc.
  * Licensed under the PostgreSQL License. See LICENSE for details.
  *
- * planner.h - Parse analysis hook for implicit index resolution
+ * planner/hooks.h - Planner hooks for BM25 query optimization
  */
 #pragma once
 
 #include <postgres.h>
 
-/* Initialize parse analysis hook (called from _PG_init) */
+/*
+ * Initialize planner hooks (called from _PG_init).
+ * Registers post_parse_analyze_hook and planner_hook.
+ */
 void tp_planner_hook_init(void);

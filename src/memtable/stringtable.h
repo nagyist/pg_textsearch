@@ -13,10 +13,9 @@
 #include <storage/lwlock.h>
 #include <utils/dsa.h>
 
+#include "posting.h"
+
 typedef struct TpStringHashEntry TpStringHashEntry;
-typedef struct TpPostingList	 TpPostingList;
-typedef struct TpLocalIndexState TpLocalIndexState;
-typedef struct TpPostingEntry	 TpPostingEntry;
 
 /*
  * Key structure that supports both lookup via char* and storage via
@@ -59,8 +58,6 @@ extern TpStringHashEntry *tp_string_table_lookup(
 		dsa_area *area, dshash_table *ht, const char *str, size_t len);
 extern TpStringHashEntry *tp_string_table_insert(
 		dsa_area *area, dshash_table *ht, const char *str, size_t len);
-extern bool tp_string_table_delete(
-		dsa_area *area, dshash_table *ht, const char *str, size_t len);
 extern void tp_string_table_clear(dsa_area *area, dshash_table *ht);
 
 /* Document term management functions */
@@ -72,10 +69,6 @@ extern void tp_add_document_terms(
 		int				   term_count,
 		int32			   doc_length);
 
-/* Pure string table operations (take dshash_table parameter) */
-extern TpPostingList *tp_string_table_get_or_create_posting_list(
-		dsa_area *area, dshash_table *ht, const char *term);
-
 /* Posting list access via string table */
 extern TpPostingList *tp_string_table_get_posting_list(
 		dsa_area *area, dshash_table *ht, const char *term);
@@ -84,15 +77,12 @@ extern TpPostingList *tp_string_table_get_posting_list(
 extern dsa_pointer tp_alloc_posting_list(dsa_area *dsa);
 extern TpPostingEntry *
 tp_alloc_posting_entries_dsa(dsa_area *area, uint32 capacity);
-extern TpPostingEntry *tp_realloc_posting_entries_dsa(
-		dsa_area *area, TpPostingList *posting_list, uint32 new_capacity);
 
 /* Helper functions for dsa_pointer conversion */
 extern TpPostingList *
 tp_get_posting_list_from_dp(dsa_area *area, dsa_pointer dp);
-extern TpPostingEntry			   *
+extern TpPostingEntry *
 tp_get_posting_entries_from_dp(dsa_area *area, dsa_pointer dp);
-extern char *tp_get_string_from_dp(dsa_area *area, dsa_pointer dp);
 
 /* LWLock tranche for string table locking */
 #define TP_STRING_HASH_TRANCHE_ID LWTRANCHE_FIRST_USER_DEFINED
