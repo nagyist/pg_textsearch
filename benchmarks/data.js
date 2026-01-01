@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767305353961,
+  "lastUpdate": 1767305356516,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -9889,6 +9889,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Rare Term Query with Score",
             "value": 3.95,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 66.67,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "64a0270c2e43f3cb4f14af116f0229d5466e68a8",
+          "message": "Move BMW scoring code to src/query/ directory\n\nRefactor code organization:\n- Move bmw.c, bmw.h from src/segment/ to src/query/\n- Move score.c, score.h from src/types/ to src/query/\n- Update include paths across codebase\n- Add comprehensive BMW test suite (test/sql/bmw.sql)\n\nThe query/ directory is a more appropriate location for query-time\noptimization code (BMW, scoring) rather than segment/ which is for\nstorage format.",
+          "timestamp": "2026-01-01T21:52:49Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/64a0270c2e43f3cb4f14af116f0229d5466e68a8"
+        },
+        "date": 1767305355836,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 17194.986,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query (1 word)",
+            "value": 2.409,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query (3 words)",
+            "value": 1.889,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query (question)",
+            "value": 1.561,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Common Term Query",
+            "value": 4.672,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query",
+            "value": 4.55,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Short Query with Score",
+            "value": 3.197,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Medium Query with Score",
+            "value": 3.867,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Long Query with Score",
+            "value": 3.09,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Rare Term Query with Score",
+            "value": 3.702,
             "unit": "ms"
           },
           {
