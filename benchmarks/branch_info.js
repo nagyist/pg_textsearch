@@ -80,5 +80,6 @@ window.BRANCH_INFO = {
   "24a36b5d86fd5bf059406102cf980ee20beade08": "feat/block-max-wand",
   "caaaaff3c48b32f31f3ca3daa505c13fa3886d9c": "feat/block-max-wand",
   "1d84841b0a00d4e690e5e8ac3ced30b6d7dff40a": "feat/block-max-wand",
-  "e039e52d7b32fc8c6092553d2e7842865f953898": "feat/block-max-wand"
+  "e039e52d7b32fc8c6092553d2e7842865f953898": "feat/block-max-wand",
+  "6f7ca4187793b0125da09133534d2533118b0b54": "main"
 };
