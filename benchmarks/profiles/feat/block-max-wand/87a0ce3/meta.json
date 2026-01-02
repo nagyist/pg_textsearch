@@ -1,0 +1,8 @@
+{
+  "sha": "87a0ce3",
+  "full_sha": "87a0ce31e0f205366221c748f0264ebad27e365a",
+  "branch": "feat/block-max-wand",
+  "date": "2026-01-02T00:22:20Z",
+  "message": "Fix BMW block iteration bug that defeated block skipping",
+  "dataset": "MS MARCO full"
+}

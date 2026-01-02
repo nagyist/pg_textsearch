@@ -1,0 +1,1390 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 78K of event 'task-clock:ppp'
+# Event count (approx.): 156941882512
+#
+# Overhead  Command   Shared Object      Symbol                                           
+# ........  ........  .................  .................................................
+#
+    20.00%  postgres  pg_textsearch.so   [.] tp_segment_read
+            |          
+             --19.55%--memcpy (inlined)
+                       tp_segment_read
+                       |          
+                        --19.29%--tp_segment_open
+                                  |          
+                                  |--15.38%--tp_segment_get_doc_freq
+                                  |          |          
+                                  |          |--11.35%--tp_get_unified_doc_freq
+                                  |          |          tp_score_documents (inlined)
+                                  |          |          tp_memtable_search (inlined)
+                                  |          |          tp_execute_scoring_query
+                                  |          |          tp_gettuple
+                                  |          |          index_getnext_tid
+                                  |          |          IndexNextWithReorder
+                                  |          |          ExecScan
+                                  |          |          ExecLimit
+                                  |          |          standard_ExecutorRun
+                                  |          |          PortalRunSelect
+                                  |          |          PortalRunFetch
+                                  |          |          _SPI_cursor_operation.lto_priv.0
+                                  |          |          exec_for_query
+                                  |          |          exec_stmts
+                                  |          |          exec_stmts
+                                  |          |          exec_stmt_block.lto_priv.0
+                                  |          |          exec_toplevel_block.constprop.0
+                                  |          |          plpgsql_exec_function
+                                  |          |          plpgsql_inline_handler
+                                  |          |          ExecuteDoStmt
+                                  |          |          standard_ProcessUtility
+                                  |          |          PortalRunUtility
+                                  |          |          PortalRunMulti
+                                  |          |          PortalRun
+                                  |          |          exec_simple_query.lto_priv.0
+                                  |          |          PostgresMain
+                                  |          |          BackendMain
+                                  |          |          postmaster_child_launch.part.0
+                                  |          |          ServerLoop.isra.0
+                                  |          |          0xffffffffffffffff
+                                  |          |          
+                                  |           --4.04%--bm25_text_bm25query_score
+                                  |                     ExecInterpExpr.lto_priv.0
+                                  |                     ExecScan
+                                  |                     ExecLimit
+                                  |                     standard_ExecutorRun
+                                  |                     PortalRunSelect
+                                  |                     PortalRunFetch
+                                  |                     _SPI_cursor_operation.lto_priv.0
+                                  |                     exec_for_query
+                                  |                     exec_stmts
+                                  |                     exec_stmts
+                                  |                     exec_stmt_block.lto_priv.0
+                                  |                     exec_toplevel_block.constprop.0
+                                  |                     plpgsql_exec_function
+                                  |                     plpgsql_inline_handler
+                                  |                     ExecuteDoStmt
+                                  |                     standard_ProcessUtility
+                                  |                     PortalRunUtility
+                                  |                     PortalRunMulti
+                                  |                     PortalRun
+                                  |                     exec_simple_query.lto_priv.0
+                                  |                     PostgresMain
+                                  |                     BackendMain
+                                  |                     postmaster_child_launch.part.0
+                                  |                     ServerLoop.isra.0
+                                  |                     0xffffffffffffffff
+                                  |          
+                                   --3.91%--tp_score_multi_term_bmw (inlined)
+                                             tp_score_documents (inlined)
+                                             tp_memtable_search (inlined)
+                                             tp_execute_scoring_query
+                                             tp_gettuple
+                                             index_getnext_tid
+                                             IndexNextWithReorder
+                                             ExecScan
+                                             ExecLimit
+                                             standard_ExecutorRun
+                                             PortalRunSelect
+                                             PortalRunFetch
+                                             _SPI_cursor_operation.lto_priv.0
+                                             exec_for_query
+                                             exec_stmts
+                                             exec_stmts
+                                             exec_stmt_block.lto_priv.0
+                                             exec_toplevel_block.constprop.0
+                                             plpgsql_exec_function
+                                             plpgsql_inline_handler
+                                             ExecuteDoStmt
+                                             standard_ProcessUtility
+                                             PortalRunUtility
+                                             PortalRunMulti
+                                             PortalRun
+                                             exec_simple_query.lto_priv.0
+                                             PostgresMain
+                                             BackendMain
+                                             postmaster_child_launch.part.0
+                                             ServerLoop.isra.0
+                                             0xffffffffffffffff
+
+    18.34%  postgres  postgres           [.] hash_search_with_hash_value
+            |
+            ---hash_search_with_hash_value
+               |          
+               |--10.52%--StartReadBuffer
+               |          ReadBufferExtended
+               |          |          
+               |           --10.21%--tp_segment_read
+               |                     |          
+               |                      --9.81%--tp_segment_open
+               |                                |          
+               |                                |--7.92%--tp_segment_get_doc_freq
+               |                                |          |          
+               |                                |          |--5.96%--tp_get_unified_doc_freq
+               |                                |          |          tp_score_documents (inlined)
+               |                                |          |          tp_memtable_search (inlined)
+               |                                |          |          tp_execute_scoring_query
+               |                                |          |          tp_gettuple
+               |                                |          |          index_getnext_tid
+               |                                |          |          IndexNextWithReorder
+               |                                |          |          ExecScan
+               |                                |          |          ExecLimit
+               |                                |          |          standard_ExecutorRun
+               |                                |          |          PortalRunSelect
+               |                                |          |          PortalRunFetch
+               |                                |          |          _SPI_cursor_operation.lto_priv.0
+               |                                |          |          exec_for_query
+               |                                |          |          exec_stmts
+               |                                |          |          exec_stmts
+               |                                |          |          exec_stmt_block.lto_priv.0
+               |                                |          |          exec_toplevel_block.constprop.0
+               |                                |          |          plpgsql_exec_function
+               |                                |          |          plpgsql_inline_handler
+               |                                |          |          ExecuteDoStmt
+               |                                |          |          standard_ProcessUtility
+               |                                |          |          PortalRunUtility
+               |                                |          |          PortalRunMulti
+               |                                |          |          PortalRun
+               |                                |          |          exec_simple_query.lto_priv.0
+               |                                |          |          PostgresMain
+               |                                |          |          BackendMain
+               |                                |          |          postmaster_child_launch.part.0
+               |                                |          |          ServerLoop.isra.0
+               |                                |          |          0xffffffffffffffff
+               |                                |          |          
+               |                                |           --1.96%--bm25_text_bm25query_score
+               |                                |                     ExecInterpExpr.lto_priv.0
+               |                                |                     ExecScan
+               |                                |                     ExecLimit
+               |                                |                     standard_ExecutorRun
+               |                                |                     PortalRunSelect
+               |                                |                     PortalRunFetch
+               |                                |                     _SPI_cursor_operation.lto_priv.0
+               |                                |                     exec_for_query
+               |                                |                     exec_stmts
+               |                                |                     exec_stmts
+               |                                |                     exec_stmt_block.lto_priv.0
+               |                                |                     exec_toplevel_block.constprop.0
+               |                                |                     plpgsql_exec_function
+               |                                |                     plpgsql_inline_handler
+               |                                |                     ExecuteDoStmt
+               |                                |                     standard_ProcessUtility
+               |                                |                     PortalRunUtility
+               |                                |                     PortalRunMulti
+               |                                |                     PortalRun
+               |                                |                     exec_simple_query.lto_priv.0
+               |                                |                     PostgresMain
+               |                                |                     BackendMain
+               |                                |                     postmaster_child_launch.part.0
+               |                                |                     ServerLoop.isra.0
+               |                                |                     0xffffffffffffffff
+               |                                |          
+               |                                 --1.89%--tp_score_multi_term_bmw (inlined)
+               |                                           tp_score_documents (inlined)
+               |                                           tp_memtable_search (inlined)
+               |                                           tp_execute_scoring_query
+               |                                           tp_gettuple
+               |                                           index_getnext_tid
+               |                                           IndexNextWithReorder
+               |                                           ExecScan
+               |                                           ExecLimit
+               |                                           standard_ExecutorRun
+               |                                           PortalRunSelect
+               |                                           PortalRunFetch
+               |                                           _SPI_cursor_operation.lto_priv.0
+               |                                           exec_for_query
+               |                                           exec_stmts
+               |                                           exec_stmts
+               |                                           exec_stmt_block.lto_priv.0
+               |                                           exec_toplevel_block.constprop.0
+               |                                           plpgsql_exec_function
+               |                                           plpgsql_inline_handler
+               |                                           ExecuteDoStmt
+               |                                           standard_ProcessUtility
+               |                                           PortalRunUtility
+               |                                           PortalRunMulti
+               |                                           PortalRun
+               |                                           exec_simple_query.lto_priv.0
+               |                                           PostgresMain
+               |                                           BackendMain
+               |                                           postmaster_child_launch.part.0
+               |                                           ServerLoop.isra.0
+               |                                           0xffffffffffffffff
+               |          
+                --7.81%--score_segment_multi_term_bmw (inlined)
+                          tp_score_multi_term_bmw (inlined)
+                          tp_score_documents (inlined)
+                          tp_memtable_search (inlined)
+                          tp_execute_scoring_query
+                          |          
+                           --7.81%--tp_gettuple
+                                     index_getnext_tid
+                                     IndexNextWithReorder
+                                     ExecScan
+                                     ExecLimit
+                                     standard_ExecutorRun
+                                     PortalRunSelect
+                                     PortalRunFetch
+                                     _SPI_cursor_operation.lto_priv.0
+                                     exec_for_query
+                                     exec_stmts
+                                     exec_stmts
+                                     exec_stmt_block.lto_priv.0
+                                     exec_toplevel_block.constprop.0
+                                     plpgsql_exec_function
+                                     plpgsql_inline_handler
+                                     ExecuteDoStmt
+                                     standard_ProcessUtility
+                                     PortalRunUtility
+                                     PortalRunMulti
+                                     PortalRun
+                                     exec_simple_query.lto_priv.0
+                                     PostgresMain
+                                     BackendMain
+                                     postmaster_child_launch.part.0
+                                     ServerLoop.isra.0
+                                     0xffffffffffffffff
+
+    13.27%  postgres  pg_textsearch.so   [.] tp_segment_posting_iterator_next
+            |          
+            |--7.84%--BlockIdSet (inlined)
+            |          ItemPointerSet (inlined)
+            |          tp_segment_posting_iterator_next
+            |          score_segment_multi_term_bmw (inlined)
+            |          tp_score_multi_term_bmw (inlined)
+            |          tp_score_documents (inlined)
+            |          tp_memtable_search (inlined)
+            |          tp_execute_scoring_query
+            |          tp_gettuple
+            |          index_getnext_tid
+            |          IndexNextWithReorder
+            |          ExecScan
+            |          ExecLimit
+            |          standard_ExecutorRun
+            |          PortalRunSelect
+            |          PortalRunFetch
+            |          _SPI_cursor_operation.lto_priv.0
+            |          exec_for_query
+            |          exec_stmts
+            |          exec_stmts
+            |          exec_stmt_block.lto_priv.0
+            |          exec_toplevel_block.constprop.0
+            |          plpgsql_exec_function
+            |          plpgsql_inline_handler
+            |          ExecuteDoStmt
+            |          standard_ProcessUtility
+            |          PortalRunUtility
+            |          PortalRunMulti
+            |          PortalRun
+            |          exec_simple_query.lto_priv.0
+            |          PostgresMain
+            |          BackendMain
+            |          postmaster_child_launch.part.0
+            |          ServerLoop.isra.0
+            |          0xffffffffffffffff
+            |          
+             --5.29%--tp_segment_posting_iterator_next
+                       score_segment_multi_term_bmw (inlined)
+                       tp_score_multi_term_bmw (inlined)
+                       tp_score_documents (inlined)
+                       tp_memtable_search (inlined)
+                       tp_execute_scoring_query
+                       |          
+                        --5.29%--tp_gettuple
+                                  index_getnext_tid
+                                  IndexNextWithReorder
+                                  ExecScan
+                                  ExecLimit
+                                  standard_ExecutorRun
+                                  PortalRunSelect
+                                  PortalRunFetch
+                                  _SPI_cursor_operation.lto_priv.0
+                                  exec_for_query
+                                  exec_stmts
+                                  exec_stmts
+                                  exec_stmt_block.lto_priv.0
+                                  exec_toplevel_block.constprop.0
+                                  plpgsql_exec_function
+                                  plpgsql_inline_handler
+                                  ExecuteDoStmt
+                                  standard_ProcessUtility
+                                  PortalRunUtility
+                                  PortalRunMulti
+                                  PortalRun
+                                  exec_simple_query.lto_priv.0
+                                  PostgresMain
+                                  BackendMain
+                                  postmaster_child_launch.part.0
+                                  ServerLoop.isra.0
+                                  0xffffffffffffffff
+
+    11.82%  postgres  [kernel.kallsyms]  [k] clear_page_erms
+            |
+            ---clear_page_erms
+               |          
+               |--7.54%--get_page_from_freelist
+               |          __alloc_pages_noprof
+               |          alloc_pages_mpol_noprof
+               |          |          
+               |           --7.49%--folio_alloc_mpol_noprof
+               |                     vma_alloc_folio_noprof
+               |                     |          
+               |                     |--6.86%--do_huge_pmd_anonymous_page
+               |                     |          __handle_mm_fault
+               |                     |          handle_mm_fault
+               |                     |          do_user_addr_fault
+               |                     |          exc_page_fault
+               |                     |          asm_exc_page_fault
+               |                     |          memcpy (inlined)
+               |                     |          tp_segment_read
+               |                     |          tp_segment_open
+               |                     |          |          
+               |                     |          |--5.55%--tp_segment_get_doc_freq
+               |                     |          |          |          
+               |                     |          |          |--4.07%--tp_get_unified_doc_freq
+               |                     |          |          |          tp_score_documents (inlined)
+               |                     |          |          |          tp_memtable_search (inlined)
+               |                     |          |          |          tp_execute_scoring_query
+               |                     |          |          |          tp_gettuple
+               |                     |          |          |          index_getnext_tid
+               |                     |          |          |          IndexNextWithReorder
+               |                     |          |          |          ExecScan
+               |                     |          |          |          ExecLimit
+               |                     |          |          |          standard_ExecutorRun
+               |                     |          |          |          PortalRunSelect
+               |                     |          |          |          PortalRunFetch
+               |                     |          |          |          _SPI_cursor_operation.lto_priv.0
+               |                     |          |          |          exec_for_query
+               |                     |          |          |          exec_stmts
+               |                     |          |          |          exec_stmts
+               |                     |          |          |          exec_stmt_block.lto_priv.0
+               |                     |          |          |          exec_toplevel_block.constprop.0
+               |                     |          |          |          plpgsql_exec_function
+               |                     |          |          |          plpgsql_inline_handler
+               |                     |          |          |          ExecuteDoStmt
+               |                     |          |          |          standard_ProcessUtility
+               |                     |          |          |          PortalRunUtility
+               |                     |          |          |          PortalRunMulti
+               |                     |          |          |          PortalRun
+               |                     |          |          |          exec_simple_query.lto_priv.0
+               |                     |          |          |          PostgresMain
+               |                     |          |          |          BackendMain
+               |                     |          |          |          postmaster_child_launch.part.0
+               |                     |          |          |          ServerLoop.isra.0
+               |                     |          |          |          0xffffffffffffffff
+               |                     |          |          |          
+               |                     |          |           --1.48%--bm25_text_bm25query_score
+               |                     |          |                     ExecInterpExpr.lto_priv.0
+               |                     |          |                     ExecScan
+               |                     |          |                     ExecLimit
+               |                     |          |                     standard_ExecutorRun
+               |                     |          |                     PortalRunSelect
+               |                     |          |                     PortalRunFetch
+               |                     |          |                     _SPI_cursor_operation.lto_priv.0
+               |                     |          |                     exec_for_query
+               |                     |          |                     exec_stmts
+               |                     |          |                     exec_stmts
+               |                     |          |                     exec_stmt_block.lto_priv.0
+               |                     |          |                     exec_toplevel_block.constprop.0
+               |                     |          |                     plpgsql_exec_function
+               |                     |          |                     plpgsql_inline_handler
+               |                     |          |                     ExecuteDoStmt
+               |                     |          |                     standard_ProcessUtility
+               |                     |          |                     PortalRunUtility
+               |                     |          |                     PortalRunMulti
+               |                     |          |                     PortalRun
+               |                     |          |                     exec_simple_query.lto_priv.0
+               |                     |          |                     PostgresMain
+               |                     |          |                     BackendMain
+               |                     |          |                     postmaster_child_launch.part.0
+               |                     |          |                     ServerLoop.isra.0
+               |                     |          |                     0xffffffffffffffff
+               |                     |          |          
+               |                     |           --1.30%--tp_score_multi_term_bmw (inlined)
+               |                     |                     tp_score_documents (inlined)
+               |                     |                     tp_memtable_search (inlined)
+               |                     |                     tp_execute_scoring_query
+               |                     |                     tp_gettuple
+               |                     |                     index_getnext_tid
+               |                     |                     IndexNextWithReorder
+               |                     |                     ExecScan
+               |                     |                     ExecLimit
+               |                     |                     standard_ExecutorRun
+               |                     |                     PortalRunSelect
+               |                     |                     PortalRunFetch
+               |                     |                     _SPI_cursor_operation.lto_priv.0
+               |                     |                     exec_for_query
+               |                     |                     exec_stmts
+               |                     |                     exec_stmts
+               |                     |                     exec_stmt_block.lto_priv.0
+               |                     |                     exec_toplevel_block.constprop.0
+               |                     |                     plpgsql_exec_function
+               |                     |                     plpgsql_inline_handler
+               |                     |                     ExecuteDoStmt
+               |                     |                     standard_ProcessUtility
+               |                     |                     PortalRunUtility
+               |                     |                     PortalRunMulti
+               |                     |                     PortalRun
+               |                     |                     exec_simple_query.lto_priv.0
+               |                     |                     PostgresMain
+               |                     |                     BackendMain
+               |                     |                     postmaster_child_launch.part.0
+               |                     |                     ServerLoop.isra.0
+               |                     |                     0xffffffffffffffff
+               |                     |          
+               |                      --0.64%--alloc_anon_folio
+               |                                do_anonymous_page
+               |                                handle_pte_fault
+               |                                __handle_mm_fault
+               |                                handle_mm_fault
+               |                                do_user_addr_fault
+               |                                exc_page_fault
+               |                                asm_exc_page_fault
+               |                                |          
+               |                                 --0.64%--memcpy (inlined)
+               |                                           tp_segment_read
+               |                                           tp_segment_open
+               |                                           |          
+               |                                            --0.52%--tp_segment_get_doc_freq
+               |          
+                --4.28%--__do_huge_pmd_anonymous_page
+                          do_huge_pmd_anonymous_page
+                          __handle_mm_fault
+                          handle_mm_fault
+                          do_user_addr_fault
+                          exc_page_fault
+                          asm_exc_page_fault
+                          memcpy (inlined)
+                          tp_segment_read
+                          tp_segment_open
+                          |          
+                          |--3.46%--tp_segment_get_doc_freq
+                          |          |          
+                          |          |--2.56%--tp_get_unified_doc_freq
+                          |          |          tp_score_documents (inlined)
+                          |          |          tp_memtable_search (inlined)
+                          |          |          tp_execute_scoring_query
+                          |          |          tp_gettuple
+                          |          |          index_getnext_tid
+                          |          |          IndexNextWithReorder
+                          |          |          ExecScan
+                          |          |          ExecLimit
+                          |          |          standard_ExecutorRun
+                          |          |          PortalRunSelect
+                          |          |          PortalRunFetch
+                          |          |          _SPI_cursor_operation.lto_priv.0
+                          |          |          exec_for_query
+                          |          |          exec_stmts
+                          |          |          exec_stmts
+                          |          |          exec_stmt_block.lto_priv.0
+                          |          |          exec_toplevel_block.constprop.0
+                          |          |          plpgsql_exec_function
+                          |          |          plpgsql_inline_handler
+                          |          |          ExecuteDoStmt
+                          |          |          standard_ProcessUtility
+                          |          |          PortalRunUtility
+                          |          |          PortalRunMulti
+                          |          |          PortalRun
+                          |          |          exec_simple_query.lto_priv.0
+                          |          |          PostgresMain
+                          |          |          BackendMain
+                          |          |          postmaster_child_launch.part.0
+                          |          |          ServerLoop.isra.0
+                          |          |          0xffffffffffffffff
+                          |          |          
+                          |           --0.90%--bm25_text_bm25query_score
+                          |                     ExecInterpExpr.lto_priv.0
+                          |                     ExecScan
+                          |                     ExecLimit
+                          |                     standard_ExecutorRun
+                          |                     PortalRunSelect
+                          |                     PortalRunFetch
+                          |                     _SPI_cursor_operation.lto_priv.0
+                          |                     exec_for_query
+                          |                     exec_stmts
+                          |                     exec_stmts
+                          |                     exec_stmt_block.lto_priv.0
+                          |                     exec_toplevel_block.constprop.0
+                          |                     plpgsql_exec_function
+                          |                     plpgsql_inline_handler
+                          |                     ExecuteDoStmt
+                          |                     standard_ProcessUtility
+                          |                     PortalRunUtility
+                          |                     PortalRunMulti
+                          |                     PortalRun
+                          |                     exec_simple_query.lto_priv.0
+                          |                     PostgresMain
+                          |                     BackendMain
+                          |                     postmaster_child_launch.part.0
+                          |                     ServerLoop.isra.0
+                          |                     0xffffffffffffffff
+                          |          
+                           --0.83%--tp_score_multi_term_bmw (inlined)
+                                     tp_score_documents (inlined)
+                                     tp_memtable_search (inlined)
+                                     tp_execute_scoring_query
+                                     tp_gettuple
+                                     index_getnext_tid
+                                     IndexNextWithReorder
+                                     ExecScan
+                                     ExecLimit
+                                     standard_ExecutorRun
+                                     PortalRunSelect
+                                     PortalRunFetch
+                                     _SPI_cursor_operation.lto_priv.0
+                                     exec_for_query
+                                     exec_stmts
+                                     exec_stmts
+                                     exec_stmt_block.lto_priv.0
+                                     exec_toplevel_block.constprop.0
+                                     plpgsql_exec_function
+                                     plpgsql_inline_handler
+                                     ExecuteDoStmt
+                                     standard_ProcessUtility
+                                     PortalRunUtility
+                                     PortalRunMulti
+                                     PortalRun
+                                     exec_simple_query.lto_priv.0
+                                     PostgresMain
+                                     BackendMain
+                                     postmaster_child_launch.part.0
+                                     ServerLoop.isra.0
+                                     0xffffffffffffffff
+
+     7.88%  postgres  pg_textsearch.so   [.] tp_execute_scoring_query
+            |          
+            |--2.42%--memcpy (inlined)
+            |          score_segment_multi_term_bmw (inlined)
+            |          tp_score_multi_term_bmw (inlined)
+            |          tp_score_documents (inlined)
+            |          tp_memtable_search (inlined)
+            |          tp_execute_scoring_query
+            |          tp_gettuple
+            |          index_getnext_tid
+            |          IndexNextWithReorder
+            |          ExecScan
+            |          ExecLimit
+            |          standard_ExecutorRun
+            |          PortalRunSelect
+            |          PortalRunFetch
+            |          _SPI_cursor_operation.lto_priv.0
+            |          exec_for_query
+            |          exec_stmts
+            |          exec_stmts
+            |          exec_stmt_block.lto_priv.0
+            |          exec_toplevel_block.constprop.0
+            |          plpgsql_exec_function
+            |          plpgsql_inline_handler
+            |          ExecuteDoStmt
+            |          standard_ProcessUtility
+            |          PortalRunUtility
+            |          PortalRunMulti
+            |          PortalRun
+            |          exec_simple_query.lto_priv.0
+            |          PostgresMain
+            |          BackendMain
+            |          postmaster_child_launch.part.0
+            |          ServerLoop.isra.0
+            |          0xffffffffffffffff
+            |          
+            |--2.18%--compute_bm25_score (inlined)
+            |          score_segment_multi_term_bmw (inlined)
+            |          tp_score_multi_term_bmw (inlined)
+            |          tp_score_documents (inlined)
+            |          tp_memtable_search (inlined)
+            |          tp_execute_scoring_query
+            |          tp_gettuple
+            |          index_getnext_tid
+            |          IndexNextWithReorder
+            |          ExecScan
+            |          ExecLimit
+            |          standard_ExecutorRun
+            |          PortalRunSelect
+            |          PortalRunFetch
+            |          _SPI_cursor_operation.lto_priv.0
+            |          exec_for_query
+            |          exec_stmts
+            |          exec_stmts
+            |          exec_stmt_block.lto_priv.0
+            |          exec_toplevel_block.constprop.0
+            |          plpgsql_exec_function
+            |          plpgsql_inline_handler
+            |          ExecuteDoStmt
+            |          standard_ProcessUtility
+            |          PortalRunUtility
+            |          PortalRunMulti
+            |          PortalRun
+            |          exec_simple_query.lto_priv.0
+            |          PostgresMain
+            |          BackendMain
+            |          postmaster_child_launch.part.0
+            |          ServerLoop.isra.0
+            |          0xffffffffffffffff
+            |          
+            |--2.15%--score_segment_multi_term_bmw (inlined)
+            |          tp_score_multi_term_bmw (inlined)
+            |          tp_score_documents (inlined)
+            |          tp_memtable_search (inlined)
+            |          tp_execute_scoring_query
+            |          tp_gettuple
+            |          index_getnext_tid
+            |          IndexNextWithReorder
+            |          ExecScan
+            |          ExecLimit
+            |          standard_ExecutorRun
+            |          PortalRunSelect
+            |          PortalRunFetch
+            |          _SPI_cursor_operation.lto_priv.0
+            |          exec_for_query
+            |          exec_stmts
+            |          exec_stmts
+            |          exec_stmt_block.lto_priv.0
+            |          exec_toplevel_block.constprop.0
+            |          plpgsql_exec_function
+            |          plpgsql_inline_handler
+            |          ExecuteDoStmt
+            |          standard_ProcessUtility
+            |          PortalRunUtility
+            |          PortalRunMulti
+            |          PortalRun
+            |          exec_simple_query.lto_priv.0
+            |          PostgresMain
+            |          BackendMain
+            |          postmaster_child_launch.part.0
+            |          ServerLoop.isra.0
+            |          0xffffffffffffffff
+            |          
+             --1.02%--tp_topk_dominated (inlined)
+                       score_segment_multi_term_bmw (inlined)
+                       tp_score_multi_term_bmw (inlined)
+                       tp_score_documents (inlined)
+                       tp_memtable_search (inlined)
+                       tp_execute_scoring_query
+                       tp_gettuple
+                       index_getnext_tid
+                       IndexNextWithReorder
+                       ExecScan
+                       ExecLimit
+                       standard_ExecutorRun
+                       PortalRunSelect
+                       PortalRunFetch
+                       _SPI_cursor_operation.lto_priv.0
+                       exec_for_query
+                       exec_stmts
+                       exec_stmts
+                       exec_stmt_block.lto_priv.0
+                       exec_toplevel_block.constprop.0
+                       plpgsql_exec_function
+                       plpgsql_inline_handler
+                       ExecuteDoStmt
+                       standard_ProcessUtility
+                       PortalRunUtility
+                       PortalRunMulti
+                       PortalRun
+                       exec_simple_query.lto_priv.0
+                       PostgresMain
+                       BackendMain
+                       postmaster_child_launch.part.0
+                       ServerLoop.isra.0
+                       0xffffffffffffffff
+
+     7.61%  postgres  postgres           [.] hash_seq_search
+            |
+            ---hash_seq_search
+               score_segment_multi_term_bmw (inlined)
+               tp_score_multi_term_bmw (inlined)
+               tp_score_documents (inlined)
+               tp_memtable_search (inlined)
+               tp_execute_scoring_query
+               |          
+                --7.49%--tp_gettuple
+                          index_getnext_tid
+                          IndexNextWithReorder
+                          ExecScan
+                          ExecLimit
+                          standard_ExecutorRun
+                          PortalRunSelect
+                          PortalRunFetch
+                          _SPI_cursor_operation.lto_priv.0
+                          exec_for_query
+                          exec_stmts
+                          exec_stmts
+                          exec_stmt_block.lto_priv.0
+                          exec_toplevel_block.constprop.0
+                          plpgsql_exec_function
+                          plpgsql_inline_handler
+                          ExecuteDoStmt
+                          standard_ProcessUtility
+                          PortalRunUtility
+                          PortalRunMulti
+                          PortalRun
+                          exec_simple_query.lto_priv.0
+                          PostgresMain
+                          BackendMain
+                          postmaster_child_launch.part.0
+                          ServerLoop.isra.0
+                          0xffffffffffffffff
+
+     2.85%  postgres  postgres           [.] uint32_hash
+            |
+            ---uint32_hash
+               hash_search
+               score_segment_multi_term_bmw (inlined)
+               tp_score_multi_term_bmw (inlined)
+               tp_score_documents (inlined)
+               tp_memtable_search (inlined)
+               tp_execute_scoring_query
+               tp_gettuple
+               index_getnext_tid
+               IndexNextWithReorder
+               ExecScan
+               ExecLimit
+               standard_ExecutorRun
+               PortalRunSelect
+               PortalRunFetch
+               _SPI_cursor_operation.lto_priv.0
+               exec_for_query
+               exec_stmts
+               exec_stmts
+               exec_stmt_block.lto_priv.0
+               exec_toplevel_block.constprop.0
+               plpgsql_exec_function
+               plpgsql_inline_handler
+               ExecuteDoStmt
+               standard_ProcessUtility
+               PortalRunUtility
+               PortalRunMulti
+               PortalRun
+               exec_simple_query.lto_priv.0
+               PostgresMain
+               BackendMain
+               postmaster_child_launch.part.0
+               ServerLoop.isra.0
+               0xffffffffffffffff
+
+     1.32%  postgres  pg_textsearch.so   [.] tp_segment_open
+            |          
+             --1.32%--tp_segment_open
+                       |          
+                        --1.08%--tp_segment_get_doc_freq
+                                  |          
+                                   --0.81%--tp_get_unified_doc_freq
+                                             tp_score_documents (inlined)
+                                             tp_memtable_search (inlined)
+                                             tp_execute_scoring_query
+                                             tp_gettuple
+                                             index_getnext_tid
+                                             IndexNextWithReorder
+                                             ExecScan
+                                             ExecLimit
+                                             standard_ExecutorRun
+                                             PortalRunSelect
+                                             PortalRunFetch
+                                             _SPI_cursor_operation.lto_priv.0
+                                             exec_for_query
+                                             exec_stmts
+                                             exec_stmts
+                                             exec_stmt_block.lto_priv.0
+                                             exec_toplevel_block.constprop.0
+                                             plpgsql_exec_function
+                                             plpgsql_inline_handler
+                                             ExecuteDoStmt
+                                             standard_ProcessUtility
+                                             PortalRunUtility
+                                             PortalRunMulti
+                                             PortalRun
+                                             exec_simple_query.lto_priv.0
+                                             PostgresMain
+                                             BackendMain
+                                             postmaster_child_launch.part.0
+                                             ServerLoop.isra.0
+                                             0xffffffffffffffff
+
+     1.27%  postgres  [kernel.kallsyms]  [k] do_user_addr_fault
+            |
+            ---do_user_addr_fault
+               exc_page_fault
+               asm_exc_page_fault
+               |          
+                --1.27%--memcpy (inlined)
+                          tp_segment_read
+                          tp_segment_open
+                          |          
+                           --1.01%--tp_segment_get_doc_freq
+                                     |          
+                                      --0.76%--tp_get_unified_doc_freq
+                                                tp_score_documents (inlined)
+                                                tp_memtable_search (inlined)
+                                                tp_execute_scoring_query
+                                                tp_gettuple
+                                                index_getnext_tid
+                                                IndexNextWithReorder
+                                                ExecScan
+                                                ExecLimit
+                                                standard_ExecutorRun
+                                                PortalRunSelect
+                                                PortalRunFetch
+                                                _SPI_cursor_operation.lto_priv.0
+                                                exec_for_query
+                                                exec_stmts
+                                                exec_stmts
+                                                exec_stmt_block.lto_priv.0
+                                                exec_toplevel_block.constprop.0
+                                                plpgsql_exec_function
+                                                plpgsql_inline_handler
+                                                ExecuteDoStmt
+                                                standard_ProcessUtility
+                                                PortalRunUtility
+                                                PortalRunMulti
+                                                PortalRun
+                                                exec_simple_query.lto_priv.0
+                                                PostgresMain
+                                                BackendMain
+                                                postmaster_child_launch.part.0
+                                                ServerLoop.isra.0
+                                                0xffffffffffffffff
+
+     1.14%  postgres  postgres           [.] hash_search
+            |
+            ---hash_search
+               score_segment_multi_term_bmw (inlined)
+               tp_score_multi_term_bmw (inlined)
+               tp_score_documents (inlined)
+               tp_memtable_search (inlined)
+               tp_execute_scoring_query
+               tp_gettuple
+               index_getnext_tid
+               IndexNextWithReorder
+               ExecScan
+               ExecLimit
+               standard_ExecutorRun
+               PortalRunSelect
+               PortalRunFetch
+               _SPI_cursor_operation.lto_priv.0
+               exec_for_query
+               exec_stmts
+               exec_stmts
+               exec_stmt_block.lto_priv.0
+               exec_toplevel_block.constprop.0
+               plpgsql_exec_function
+               plpgsql_inline_handler
+               ExecuteDoStmt
+               standard_ProcessUtility
+               PortalRunUtility
+               PortalRunMulti
+               PortalRun
+               exec_simple_query.lto_priv.0
+               PostgresMain
+               BackendMain
+               postmaster_child_launch.part.0
+               ServerLoop.isra.0
+               0xffffffffffffffff
+
+     0.87%  postgres  libc.so.6          [.] 0x00000000001885e3
+            |
+            ---0x7f88099885e3
+               |          
+                --0.87%--hash_search_with_hash_value
+                          |          
+                           --0.78%--score_segment_multi_term_bmw (inlined)
+                                     tp_score_multi_term_bmw (inlined)
+                                     tp_score_documents (inlined)
+                                     tp_memtable_search (inlined)
+                                     tp_execute_scoring_query
+                                     tp_gettuple
+                                     index_getnext_tid
+                                     IndexNextWithReorder
+                                     ExecScan
+                                     ExecLimit
+                                     standard_ExecutorRun
+                                     PortalRunSelect
+                                     PortalRunFetch
+                                     _SPI_cursor_operation.lto_priv.0
+                                     exec_for_query
+                                     exec_stmts
+                                     exec_stmts
+                                     exec_stmt_block.lto_priv.0
+                                     exec_toplevel_block.constprop.0
+                                     plpgsql_exec_function
+                                     plpgsql_inline_handler
+                                     ExecuteDoStmt
+                                     standard_ProcessUtility
+                                     PortalRunUtility
+                                     PortalRunMulti
+                                     PortalRun
+                                     exec_simple_query.lto_priv.0
+                                     PostgresMain
+                                     BackendMain
+                                     postmaster_child_launch.part.0
+                                     ServerLoop.isra.0
+                                     0xffffffffffffffff
+
+     0.83%  postgres  postgres           [.] LWLockAttemptLock
+            |
+            ---LWLockAttemptLock
+               LWLockAcquire
+               |          
+                --0.70%--StartReadBuffer
+                          ReadBufferExtended
+                          |          
+                           --0.66%--tp_segment_read
+                                     |          
+                                      --0.60%--tp_segment_open
+
+     0.72%  postgres  libc.so.6          [.] 0x00000000001885dd
+            |
+            ---0x7f88099885dd
+               |          
+                --0.72%--hash_search_with_hash_value
+
+     0.68%  postgres  pg_textsearch.so   [.] heap_sift_down.constprop.0
+     0.61%  postgres  postgres           [.] LWLockRelease
+            |
+            ---LWLockRelease
+
+     0.59%  postgres  [kernel.kallsyms]  [k] folio_zero_user
+            |
+            ---folio_zero_user
+               |          
+                --0.59%--__do_huge_pmd_anonymous_page
+                          do_huge_pmd_anonymous_page
+                          __handle_mm_fault
+                          handle_mm_fault
+                          do_user_addr_fault
+                          exc_page_fault
+                          asm_exc_page_fault
+                          memcpy (inlined)
+                          tp_segment_read
+                          tp_segment_open
+
+     0.57%  postgres  [kernel.kallsyms]  [k] free_unref_folios
+            |
+            ---free_unref_folios
+               folios_put_refs
+               free_pages_and_swap_cache
+               __tlb_batch_free_encoded_pages
+               tlb_finish_mmu
+               unmap_region
+               do_vmi_align_munmap
+               do_vmi_munmap
+               __vm_munmap
+               __x64_sys_munmap
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __munmap
+               cfree
+               tp_segment_close
+
+     0.57%  postgres  postgres           [.] StartReadBuffer
+            |
+            ---StartReadBuffer
+               ReadBufferExtended
+
+     0.52%  postgres  [kernel.kallsyms]  [k] _raw_spin_unlock_irqrestore
+            |
+            ---_raw_spin_unlock_irqrestore
+
+     0.49%  postgres  postgres           [.] hash_bytes
+     0.36%  postgres  postgres           [.] PinBuffer.lto_priv.0
+     0.33%  postgres  libc.so.6          [.] 0x0000000000188a40
+     0.32%  postgres  [kernel.kallsyms]  [k] __cond_resched
+     0.26%  postgres  postgres           [.] LWLockAcquire
+     0.23%  postgres  postgres           [.] GetPrivateRefCountEntry.lto_priv.0
+     0.21%  postgres  postgres           [.] LockBuffer
+     0.21%  postgres  postgres           [.] ReadBufferExtended
+     0.19%  postgres  [kernel.kallsyms]  [k] post_alloc_hook
+     0.17%  postgres  [kernel.kallsyms]  [k] __rmqueue_pcplist
+     0.17%  postgres  libc.so.6          [.] 0x00000000001882e8
+     0.17%  postgres  [kernel.kallsyms]  [k] zap_present_ptes
+     0.16%  postgres  [kernel.kallsyms]  [k] do_anonymous_page
+     0.16%  postgres  postgres           [.] UnpinBufferNoOwner.lto_priv.0
+     0.15%  postgres  [kernel.kallsyms]  [k] rcu_all_qs
+     0.15%  postgres  [kernel.kallsyms]  [k] handle_mm_fault
+     0.15%  postgres  libc.so.6          [.] 0x00000000001885ee
+     0.14%  postgres  postgres           [.] ResourceOwnerForget
+     0.14%  postgres  libc.so.6          [.] 0x0000000000188a9f
+     0.14%  postgres  libc.so.6          [.] 0x00000000001885e8
+     0.14%  postgres  libc.so.6          [.] 0x0000000000188a44
+     0.13%  postgres  [kernel.kallsyms]  [k] srso_alias_safe_ret
+     0.13%  postgres  [kernel.kallsyms]  [k] __handle_mm_fault
+     0.12%  postgres  [kernel.kallsyms]  [k] __mem_cgroup_charge
+     0.11%  postgres  [kernel.kallsyms]  [k] free_tail_page_prepare
+     0.11%  postgres  pg_textsearch.so   [.] tp_segment_posting_iterator_load_block.part.0
+     0.10%  postgres  [kernel.kallsyms]  [k] __lruvec_stat_mod_folio
+     0.09%  postgres  postgres           [.] ResourceOwnerEnlarge
+     0.09%  postgres  postgres           [.] ReservePrivateRefCountEntry.lto_priv.0
+     0.09%  postgres  [kernel.kallsyms]  [k] rmqueue
+     0.09%  postgres  [kernel.kallsyms]  [k] __alloc_pages_noprof
+     0.09%  postgres  [kernel.kallsyms]  [k] prep_compound_page
+     0.09%  postgres  postgres           [.] ReleaseBuffer
+     0.08%  postgres  [kernel.kallsyms]  [k] alloc_anon_folio
+     0.08%  postgres  pg_textsearch.so   [.] LockBuffer@plt
+     0.08%  postgres  [kernel.kallsyms]  [k] __mod_memcg_lruvec_state
+     0.08%  postgres  postgres           [.] ItemPointerCompare
+     0.07%  postgres  pg_textsearch.so   [.] hash_search@plt
+     0.07%  postgres  [kernel.kallsyms]  [k] folio_add_new_anon_rmap
+     0.07%  postgres  [kernel.kallsyms]  [k] get_page_from_freelist
+     0.07%  postgres  [kernel.kallsyms]  [k] mas_walk
+     0.06%  postgres  pg_textsearch.so   [.] tp_topk_add
+     0.06%  postgres  postgres           [.] tag_hash
+     0.05%  postgres  [kernel.kallsyms]  [k] handle_pte_fault
+     0.05%  postgres  [kernel.kallsyms]  [k] handle_softirqs
+     0.05%  postgres  [kernel.kallsyms]  [k] __pte_offset_map_lock
+     0.05%  postgres  [kernel.kallsyms]  [k] folio_add_lru
+     0.04%  postgres  [kernel.kallsyms]  [k] lock_vma_under_rcu
+     0.04%  postgres  [kernel.kallsyms]  [k] alloc_pages_mpol_noprof
+     0.04%  postgres  [kernel.kallsyms]  [k] blk_cgroup_congested
+     0.04%  postgres  [kernel.kallsyms]  [k] srso_alias_return_thunk
+     0.04%  postgres  [kernel.kallsyms]  [k] try_charge_memcg
+     0.04%  postgres  postgres           [.] TParserGet.part.0.lto_priv.0
+     0.03%  postgres  [kernel.kallsyms]  [k] get_vma_policy
+     0.03%  postgres  [kernel.kallsyms]  [k] _raw_spin_lock
+     0.03%  postgres  [kernel.kallsyms]  [k] get_mem_cgroup_from_mm
+     0.03%  postgres  [kernel.kallsyms]  [k] __folio_throttle_swaprate
+     0.03%  postgres  [kernel.kallsyms]  [k] __next_zones_zonelist
+     0.03%  postgres  [kernel.kallsyms]  [k] folio_remove_rmap_ptes
+     0.03%  postgres  [kernel.kallsyms]  [k] policy_nodemask
+     0.03%  postgres  [kernel.kallsyms]  [k] queued_spin_unlock
+     0.03%  postgres  [kernel.kallsyms]  [k] pte_offset_map_nolock
+     0.03%  postgres  postgres           [.] hash_seq_term
+     0.03%  postgres  [kernel.kallsyms]  [k] free_pages_and_swap_cache
+     0.02%  postgres  [kernel.kallsyms]  [k] folio_alloc_mpol_noprof
+     0.02%  postgres  [kernel.kallsyms]  [k] get_pfnblock_flags_mask
+     0.02%  postgres  dict_snowball.so   [.] find_among_b
+     0.02%  postgres  [kernel.kallsyms]  [k] zap_pte_range
+     0.02%  postgres  [kernel.kallsyms]  [k] __raw_callee_save___pv_queued_spin_unlock
+     0.02%  postgres  [kernel.kallsyms]  [k] zap_huge_pmd
+     0.02%  postgres  postgres           [.] ReadBuffer
+     0.02%  postgres  [kernel.kallsyms]  [k] vma_alloc_folio_noprof
+     0.02%  postgres  libc.so.6          [.] 0x0000000000188603
+     0.02%  postgres  [kernel.kallsyms]  [k] folios_put_refs
+     0.02%  postgres  [kernel.kallsyms]  [k] __folio_mod_stat
+     0.02%  postgres  [kernel.kallsyms]  [k] folio_add_lru_vma
+     0.02%  postgres  [kernel.kallsyms]  [k] percpu_counter_add_batch
+     0.02%  postgres  [kernel.kallsyms]  [k] __do_huge_pmd_anonymous_page
+     0.02%  postgres  [kernel.kallsyms]  [k] __tlb_remove_folio_pages
+     0.02%  postgres  [kernel.kallsyms]  [k] _raw_spin_trylock
+     0.02%  postgres  [kernel.kallsyms]  [k] down_read_trylock
+     0.02%  postgres  libc.so.6          [.] 0x0000000000188a99
+     0.02%  postgres  postgres           [.] p_iseqC.lto_priv.0
+     0.01%  postgres  [kernel.kallsyms]  [k] __mem_cgroup_uncharge_folios
+     0.01%  postgres  [kernel.kallsyms]  [k] __pte_offset_map
+     0.01%  postgres  [kernel.kallsyms]  [k] free_unref_page_commit
+     0.01%  postgres  libc.so.6          [.] 0x000000000018868b
+     0.01%  postgres  postgres           [.] searchstoplist
+     0.01%  postgres  [kernel.kallsyms]  [k] kthread_blkcg
+     0.01%  postgres  [kernel.kallsyms]  [k] up_read
+     0.01%  postgres  dict_snowball.so   [.] english_UTF_8_stem
+     0.01%  postgres  [kernel.kallsyms]  [k] __vmf_anon_prepare
+     0.01%  postgres  [kernel.kallsyms]  [k] uncharge_folio
+     0.01%  postgres  dict_snowball.so   [.] in_grouping_U
+     0.01%  postgres  libc.so.6          [.] 0x00000000001886ae
+     0.01%  postgres  postgres           [.] pg_qsort
+     0.01%  postgres  [kernel.kallsyms]  [k] cgroup_rstat_updated
+     0.01%  postgres  [kernel.kallsyms]  [k] do_huge_pmd_anonymous_page
+     0.01%  postgres  [kernel.kallsyms]  [k] timer_expire_remote
+     0.01%  postgres  libc.so.6          [.] 0x00000000001885d9
+     0.01%  postgres  pg_textsearch.so   [.] hash_seq_search@plt
+     0.01%  postgres  postgres           [.] AllocSetFree
+     0.01%  postgres  [kernel.kallsyms]  [k] kmem_cache_alloc_noprof
+     0.01%  postgres  [kernel.kallsyms]  [k] page_counter_try_charge
+     0.01%  postgres  postgres           [.] hash_seq_init
+     0.01%  postgres  [kernel.kallsyms]  [k] __mod_node_page_state
+     0.01%  postgres  [kernel.kallsyms]  [k] __tlb_remove_folio_pages_size.isra.0
+     0.01%  postgres  [kernel.kallsyms]  [k] obj_cgroup_uncharge_pages
+     0.01%  postgres  [kernel.kallsyms]  [k] perf_iterate_ctx
+     0.01%  postgres  [kernel.kallsyms]  [k] rcu_core
+     0.01%  postgres  libc.so.6          [.] 0x00000000001882e0
+     0.01%  postgres  libc.so.6          [.] 0x0000000000188617
+     0.01%  postgres  postgres           [.] make_tsvector
+     0.01%  postgres  postgres           [.] p_isspecial.lto_priv.0
+     0.01%  postgres  postgres           [.] pg_utf_mblen_private
+     0.01%  postgres  [kernel.kallsyms]  [k] __fdget_pos
+     0.01%  postgres  [kernel.kallsyms]  [k] __memcg_slab_free_hook
+     0.01%  postgres  [kernel.kallsyms]  [k] folio_batch_move_lru
+     0.01%  postgres  [kernel.kallsyms]  [k] tmigr_handle_remote_cpu
+     0.01%  postgres  [kernel.kallsyms]  [k] vm_normal_page
+     0.01%  postgres  dict_snowball.so   [.] find_among
+     0.01%  postgres  dict_snowball.so   [.] out_grouping_U
+     0.01%  postgres  libc.so.6          [.] wcsrtombs
+     0.01%  postgres  postgres           [.] AllocSetAlloc
+     0.01%  postgres  postgres           [.] p_isEOF.lto_priv.0
+     0.01%  postgres  postgres           [.] p_isalpha.lto_priv.0
+     0.01%  postgres  postgres           [.] p_isasclet.lto_priv.0
+     0.01%  postgres  postgres           [.] parsetext
+     0.01%  postgres  [kernel.kallsyms]  [k] __memcg_kmem_charge_page
+     0.01%  postgres  [kernel.kallsyms]  [k] _find_first_bit
+     0.01%  postgres  [kernel.kallsyms]  [k] cond_accept_memory
+     0.01%  postgres  [kernel.kallsyms]  [k] folio_remove_rmap_pmd
+     0.01%  postgres  [kernel.kallsyms]  [k] free_unref_page
+     0.01%  postgres  [kernel.kallsyms]  [k] mas_rev_awalk
+     0.01%  postgres  [kernel.kallsyms]  [k] pte_alloc_one
+     0.01%  postgres  [kernel.kallsyms]  [k] sched_balance_rq
+     0.01%  postgres  [kernel.kallsyms]  [k] sched_balance_update_blocked_averages
+     0.01%  postgres  [kernel.kallsyms]  [k] vm_unmapped_area
+     0.01%  postgres  libc.so.6          [.] 0x0000000000031d3b
+     0.01%  postgres  libc.so.6          [.] 0x000000000018aff3
+     0.01%  postgres  pg_textsearch.so   [.] ReadBuffer@plt
+     0.01%  postgres  pg_textsearch.so   [.] bm25_text_bm25query_score
+     0.01%  postgres  postgres           [.] LexizeExec
+     0.01%  postgres  postgres           [.] SearchCatCacheInternal.lto_priv.0
+     0.01%  postgres  postgres           [.] compareWORD
+     0.00%  postgres  [kernel.kallsyms]  [k] __free_pages
+     0.00%  postgres  [kernel.kallsyms]  [k] __memcg_slab_post_alloc_hook
+     0.00%  postgres  [kernel.kallsyms]  [k] _raw_spin_lock_irqsave
+     0.00%  postgres  [kernel.kallsyms]  [k] do_syscall_64
+     0.00%  postgres  [kernel.kallsyms]  [k] do_vmi_align_munmap
+     0.00%  postgres  [kernel.kallsyms]  [k] free_swap_cache
+     0.00%  postgres  [kernel.kallsyms]  [k] mem_cgroup_from_task
+     0.00%  postgres  [kernel.kallsyms]  [k] mmap_region
+     0.00%  postgres  [kernel.kallsyms]  [k] mod_objcg_state
+     0.00%  postgres  [kernel.kallsyms]  [k] rcu_cblist_dequeue
+     0.00%  postgres  [kernel.kallsyms]  [k] tlb_finish_mmu
+     0.00%  postgres  [kernel.kallsyms]  [k] unlink_anon_vmas
+     0.00%  postgres  libc.so.6          [.] cfree
+     0.00%  postgres  libc.so.6          [.] towlower
+     0.00%  postgres  libc.so.6          [.] 0x00000000000c9f8a
+     0.00%  postgres  libc.so.6          [.] 0x00000000001885e1
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188687
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188694
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188aa1
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b00b
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b7a1
+     0.00%  postgres  pg_textsearch.so   [.] tp_get_posting_list
+     0.00%  postgres  pg_textsearch.so   [.] tp_segment_get_doc_freq
+     0.00%  postgres  pg_textsearch.so   [.] tp_topk_extract
+     0.00%  postgres  postgres           [.] AllocSetAllocFromNewBlock
+     0.00%  postgres  postgres           [.] ExecInterpExpr.lto_priv.0
+     0.00%  postgres  postgres           [.] lowerstr_with_len.part.0
+     0.00%  postgres  postgres           [.] p_isdigit.lto_priv.0
+     0.00%  postgres  postgres           [.] pnstrdup
+     0.00%  postgres  postgres           [.] prsd_nexttoken
+     0.00%  postgres  [kernel.kallsyms]  [k] __pkru_allows_pkey
+     0.00%  postgres  [kernel.kallsyms]  [k] __run_timers
+     0.00%  postgres  [kernel.kallsyms]  [k] __tlb_remove_page_size
+     0.00%  postgres  [kernel.kallsyms]  [k] __x64_sys_lseek
+     0.00%  postgres  [kernel.kallsyms]  [k] __zone_watermark_ok
+     0.00%  postgres  [kernel.kallsyms]  [k] arch_get_unmapped_area_topdown_vmflags
+     0.00%  postgres  [kernel.kallsyms]  [k] ext4_llseek
+     0.00%  postgres  [kernel.kallsyms]  [k] finish_task_switch.isra.0
+     0.00%  postgres  [kernel.kallsyms]  [k] folio_lruvec_lock_irqsave
+     0.00%  postgres  [kernel.kallsyms]  [k] free_p4d_range
+     0.00%  postgres  [kernel.kallsyms]  [k] free_pud_range
+     0.00%  postgres  [kernel.kallsyms]  [k] khugepaged_enter_vma
+     0.00%  postgres  [kernel.kallsyms]  [k] kmem_cache_free
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_destroy
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_find
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_leaf_max_gap
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_next_slot
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_prev_slot
+     0.00%  postgres  [kernel.kallsyms]  [k] mm_trace_rss_stat
+     0.00%  postgres  [kernel.kallsyms]  [k] mt_free_rcu
+     0.00%  postgres  [kernel.kallsyms]  [k] page_counter_cancel
+     0.00%  postgres  [kernel.kallsyms]  [k] perf_event_mmap_event
+     0.00%  postgres  [kernel.kallsyms]  [k] perf_iterate_sb.constprop.0
+     0.00%  postgres  [kernel.kallsyms]  [k] pgtable_trans_huge_withdraw
+     0.00%  postgres  [kernel.kallsyms]  [k] propagate_protected_usage
+     0.00%  postgres  [kernel.kallsyms]  [k] tmigr_handle_remote_up
+     0.00%  postgres  [kernel.kallsyms]  [k] uncharge_batch
+     0.00%  postgres  [kernel.kallsyms]  [k] vma_thp_gfp_mask
+     0.00%  postgres  [kernel.kallsyms]  [k] zap_pmd_range.isra.0
+     0.00%  postgres  dict_snowball.so   [.] replace_s
+     0.00%  postgres  libc.so.6          [.] __munmap
+     0.00%  postgres  libc.so.6          [.] _dl_mcount_wrapper_check
+     0.00%  postgres  libc.so.6          [.] iswalpha
+     0.00%  postgres  libc.so.6          [.] 0x0000000000030d70
+     0.00%  postgres  libc.so.6          [.] 0x0000000000031c05
+     0.00%  postgres  libc.so.6          [.] 0x00000000000c9f42
+     0.00%  postgres  libc.so.6          [.] 0x00000000000c9f8f
+     0.00%  postgres  libc.so.6          [.] 0x00000000001885c3
+     0.00%  postgres  libc.so.6          [.] 0x000000000018861f
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188638
+     0.00%  postgres  libc.so.6          [.] 0x00000000001886b7
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a51
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a61
+     0.00%  postgres  libc.so.6          [.] 0x0000000000189487
+     0.00%  postgres  libc.so.6          [.] 0x000000000018afd4
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b001
+     0.00%  postgres  libm.so.6          [.] __log_finite@plt
+     0.00%  postgres  pg_textsearch.so   [.] ReleaseBuffer@plt
+     0.00%  postgres  plpgsql.so         [.] exec_for_query
+     0.00%  postgres  plpgsql.so         [.] exec_run_select.constprop.0
+     0.00%  postgres  plpgsql.so         [.] exec_stmts
+     0.00%  postgres  postgres           [.] AllocSetContextCreateInternal
+     0.00%  postgres  postgres           [.] ExecStoreBufferHeapTuple
+     0.00%  postgres  postgres           [.] dsa_get_address
+     0.00%  postgres  postgres           [.] element_alloc
+     0.00%  postgres  postgres           [.] hash_create
+     0.00%  postgres  postgres           [.] heap_hot_search_buffer
+     0.00%  postgres  postgres           [.] pfree
+     0.00%  postgres  postgres           [.] pg_class_aclmask_ext.lto_priv.0
+     0.00%  postgres  postgres           [.] recomputeNamespacePath
+     0.00%  postgres  [kernel.kallsyms]  [k] __anon_vma_interval_tree_remove
+     0.00%  postgres  [kernel.kallsyms]  [k] __call_rcu_common.constprop.0
+     0.00%  postgres  [kernel.kallsyms]  [k] __get_user_8
+     0.00%  postgres  [kernel.kallsyms]  [k] __mem_cgroup_uncharge
+     0.00%  postgres  [kernel.kallsyms]  [k] __memcpy
+     0.00%  postgres  [kernel.kallsyms]  [k] __mt_destroy
+     0.00%  postgres  [kernel.kallsyms]  [k] __page_cache_release.part.0
+     0.00%  postgres  [kernel.kallsyms]  [k] __pkru_allows_pkey
+     0.00%  postgres  [kernel.kallsyms]  [k] __thp_vma_allowable_orders
+     0.00%  postgres  [kernel.kallsyms]  [k] __vm_munmap
+     0.00%  postgres  [kernel.kallsyms]  [k] _find_next_bit
+     0.00%  postgres  [kernel.kallsyms]  [k] can_modify_mm
+     0.00%  postgres  [kernel.kallsyms]  [k] cap_mmap_addr
+     0.00%  postgres  [kernel.kallsyms]  [k] cap_vm_enough_memory
+     0.00%  postgres  [kernel.kallsyms]  [k] do_mmap
+     0.00%  postgres  [kernel.kallsyms]  [k] do_vmi_munmap
+     0.00%  postgres  [kernel.kallsyms]  [k] exc_page_fault
+     0.00%  postgres  [kernel.kallsyms]  [k] find_mergeable_anon_vma
+     0.00%  postgres  [kernel.kallsyms]  [k] flush_tlb_mm_range
+     0.00%  postgres  [kernel.kallsyms]  [k] free_pgd_range
+     0.00%  postgres  [kernel.kallsyms]  [k] get_free_pages_noprof
+     0.00%  postgres  [kernel.kallsyms]  [k] irqentry_exit_to_user_mode
+     0.00%  postgres  [kernel.kallsyms]  [k] kfree
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_pop_node
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_preallocate
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_prev
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_store_prealloc
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_update_gap.part.0
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_wr_node_store
+     0.00%  postgres  [kernel.kallsyms]  [k] mas_wr_walk
+     0.00%  postgres  [kernel.kallsyms]  [k] may_expand_vm
+     0.00%  postgres  [kernel.kallsyms]  [k] note_gp_changes
+     0.00%  postgres  [kernel.kallsyms]  [k] perf_event_mmap_output
+     0.00%  postgres  [kernel.kallsyms]  [k] perf_output_begin
+     0.00%  postgres  [kernel.kallsyms]  [k] pgtable_trans_huge_deposit
+     0.00%  postgres  [kernel.kallsyms]  [k] pmd_install
+     0.00%  postgres  [kernel.kallsyms]  [k] pte_mkwrite
+     0.00%  postgres  [kernel.kallsyms]  [k] rcu_do_batch
+     0.00%  postgres  [kernel.kallsyms]  [k] rcu_report_qs_rdp
+     0.00%  postgres  [kernel.kallsyms]  [k] run_timer_softirq
+     0.00%  postgres  [kernel.kallsyms]  [k] sched_balance_find_src_group
+     0.00%  postgres  [kernel.kallsyms]  [k] security_vm_enough_memory_mm
+     0.00%  postgres  [kernel.kallsyms]  [k] strnlen
+     0.00%  postgres  [kernel.kallsyms]  [k] task_mm_cid_work
+     0.00%  postgres  [kernel.kallsyms]  [k] tmigr_handle_remote
+     0.00%  postgres  [kernel.kallsyms]  [k] unlink_file_vma_batch_add
+     0.00%  postgres  [kernel.kallsyms]  [k] unmap_region
+     0.00%  postgres  [kernel.kallsyms]  [k] update_sg_lb_stats
+     0.00%  postgres  [kernel.kallsyms]  [k] x64_sys_call
+     0.00%  postgres  dict_snowball.so   [.] dsnowball_lexize
+     0.00%  postgres  dict_snowball.so   [.] get_utf8.part.0
+     0.00%  postgres  dict_snowball.so   [.] in_grouping_b_U
+     0.00%  postgres  libc.so.6          [.] __mmap
+     0.00%  postgres  libc.so.6          [.] malloc
+     0.00%  postgres  libc.so.6          [.] mbstowcs
+     0.00%  postgres  libc.so.6          [.] wcstombs
+     0.00%  postgres  libc.so.6          [.] 0x0000000000030d68
+     0.00%  postgres  libc.so.6          [.] 0x0000000000030d6c
+     0.00%  postgres  libc.so.6          [.] 0x0000000000030d80
+     0.00%  postgres  libc.so.6          [.] 0x0000000000030e80
+     0.00%  postgres  libc.so.6          [.] 0x0000000000031b81
+     0.00%  postgres  libc.so.6          [.] 0x0000000000031c11
+     0.00%  postgres  libc.so.6          [.] 0x000000000003206f
+     0.00%  postgres  libc.so.6          [.] 0x00000000000a940c
+     0.00%  postgres  libc.so.6          [.] 0x00000000000aa960
+     0.00%  postgres  libc.so.6          [.] 0x00000000000aab01
+     0.00%  postgres  libc.so.6          [.] 0x00000000000ab104
+     0.00%  postgres  libc.so.6          [.] 0x00000000000abf05
+     0.00%  postgres  libc.so.6          [.] 0x00000000000ac51a
+     0.00%  postgres  libc.so.6          [.] 0x00000000000c9f50
+     0.00%  postgres  libc.so.6          [.] 0x000000000012a774
+     0.00%  postgres  libc.so.6          [.] 0x00000000001885c7
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188608
+     0.00%  postgres  libc.so.6          [.] 0x000000000018861b
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a47
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a4b
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a65
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a6b
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a78
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a82
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188a9b
+     0.00%  postgres  libc.so.6          [.] 0x0000000000188aa6
+     0.00%  postgres  libc.so.6          [.] 0x000000000018950a
+     0.00%  postgres  libc.so.6          [.] 0x000000000018afdd
+     0.00%  postgres  libc.so.6          [.] 0x000000000018afe0
+     0.00%  postgres  libc.so.6          [.] 0x000000000018afef
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b007
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b315
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b3e5
+     0.00%  postgres  libc.so.6          [.] 0x000000000018b784
+     0.00%  postgres  libc.so.6          [.] 0x000000000018c860
+     0.00%  postgres  libc.so.6          [.] 0x000000000018ccec
+     0.00%  postgres  libc.so.6          [.] 0x000000000018d404
+     0.00%  postgres  libc.so.6          [.] 0x000000000018d534
+     0.00%  postgres  libm.so.6          [.] 0x0000000000079d50
+     0.00%  postgres  libm.so.6          [.] 0x0000000000079d54
+     0.00%  postgres  pg_textsearch.so   [.] ItemPointerCompare@plt
+     0.00%  postgres  pg_textsearch.so   [.] UnlockReleaseBuffer@plt
+     0.00%  postgres  pg_textsearch.so   [.] palloc@plt
+     0.00%  postgres  pg_textsearch.so   [.] pfree@plt
+     0.00%  postgres  pg_textsearch.so   [.] tp_endscan
+     0.00%  postgres  pg_textsearch.so   [.] tp_get_metapage
+     0.00%  postgres  pg_textsearch.so   [.] tp_gettuple
+     0.00%  postgres  pg_textsearch.so   [.] tp_memtable_source_create
+     0.00%  postgres  postgres           [.] AllocSetAllocLarge
+     0.00%  postgres  postgres           [.] CheckExprStillValid
+     0.00%  postgres  postgres           [.] CreatePortal
+     0.00%  postgres  postgres           [.] DirectFunctionCall2Coll
+     0.00%  postgres  postgres           [.] EOH_init_header
+     0.00%  postgres  postgres           [.] ExecInterpExprStillValid
+     0.00%  postgres  postgres           [.] ExecLimit
+     0.00%  postgres  postgres           [.] ExecScan
+     0.00%  postgres  postgres           [.] ExecTypeFromTLInternal.lto_priv.0
+     0.00%  postgres  postgres           [.] FileSize
+     0.00%  postgres  postgres           [.] FunctionCall1Coll
+     0.00%  postgres  postgres           [.] FunctionCall2Coll
+     0.00%  postgres  postgres           [.] GrantLockLocal
+     0.00%  postgres  postgres           [.] IndexNextWithReorder
+     0.00%  postgres  postgres           [.] LockReassignOwner
+     0.00%  postgres  postgres           [.] LockRelationOid
+     0.00%  postgres  postgres           [.] MemoryContextDelete
+     0.00%  postgres  postgres           [.] PortalDrop
+     0.00%  postgres  postgres           [.] PredicateLockTID
+     0.00%  postgres  postgres           [.] PushActiveSnapshotWithLevel
+     0.00%  postgres  postgres           [.] RelationClose
+     0.00%  postgres  postgres           [.] ReleaseAndReadBuffer
+     0.00%  postgres  postgres           [.] RelnameGetRelid
+     0.00%  postgres  postgres           [.] SPI_freetuptable
+     0.00%  postgres  postgres           [.] SPI_is_cursor_plan
+     0.00%  postgres  postgres           [.] ScanKeywords_hash_func.lto_priv.0
+     0.00%  postgres  postgres           [.] ScanQueryForLocks
+     0.00%  postgres  postgres           [.] SearchPathMatchesCurrentEnvironment
+     0.00%  postgres  postgres           [.] UnlockReleaseBuffer
+     0.00%  postgres  postgres           [.] errstart
+     0.00%  postgres  postgres           [.] expanded_record_set_tuple
+     0.00%  postgres  postgres           [.] exprTypmod
+     0.00%  postgres  postgres           [.] expr_setup_walker
+     0.00%  postgres  postgres           [.] fmtint
+     0.00%  postgres  postgres           [.] get_rel_relkind
+     0.00%  postgres  postgres           [.] heap_page_prune_opt
+     0.00%  postgres  postgres           [.] heapam_index_fetch_end.lto_priv.0
+     0.00%  postgres  postgres           [.] heapam_index_fetch_tuple.lto_priv.0
+     0.00%  postgres  postgres           [.] heapam_slot_callbacks.lto_priv.0
+     0.00%  postgres  postgres           [.] index_fetch_heap
+     0.00%  postgres  postgres           [.] index_getnext_tid
+     0.00%  postgres  postgres           [.] int4hashfast
+     0.00%  postgres  postgres           [.] make_expanded_record_from_tupdesc
+     0.00%  postgres  postgres           [.] memmove@plt
+     0.00%  postgres  postgres           [.] nocachegetattr
+     0.00%  postgres  postgres           [.] p_isalnum.lto_priv.0
+     0.00%  postgres  postgres           [.] p_isnotalnum.lto_priv.0
+     0.00%  postgres  postgres           [.] pairingheap_remove
+     0.00%  postgres  postgres           [.] palloc
+     0.00%  postgres  postgres           [.] palloc0
+     0.00%  postgres  postgres           [.] pgstat_init_relation
+     0.00%  postgres  postgres           [.] planstate_tree_walker_impl
+     0.00%  postgres  postgres           [.] regconfigout
+     0.00%  postgres  postgres           [.] standard_ExecutorRun
+     0.00%  postgres  postgres           [.] to_tsvector_byid
+     0.00%  postgres  postgres           [.] tts_buffer_heap_release.lto_priv.0
+     0.00%  postgres  postgres           [.] tts_heap_getsomeattrs.lto_priv.0
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
