@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767421256674,
+  "lastUpdate": 1767421257873,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -7924,6 +7924,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Avg Query Latency with Score",
             "value": 48.53,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@tigerdata.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@tigerdata.com"
+          },
+          "id": "53c50c25080df9321a06fe80065835f9d1487caa",
+          "message": "Fix ParadeDB installation - use GitHub releases\n\nThe packagecloud repo doesn't have pg_search packages. Download\ndirectly from GitHub releases instead.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2026-01-03T05:50:20Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/53c50c25080df9321a06fe80065835f9d1487caa"
+        },
+        "date": 1767421257639,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 533816.271,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 7.513,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 18.561,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query (question)",
+            "value": 15.084,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Common Term Query",
+            "value": 0.044,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query",
+            "value": 4.864,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 34.96,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Short Query with Score",
+            "value": 13.32,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Medium Query with Score",
+            "value": 23.995,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Long Query with Score",
+            "value": 26.852,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Rare Term Query with Score",
+            "value": 15.93,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Avg Query Latency with Score",
+            "value": 50.63,
             "unit": "ms"
           },
           {
