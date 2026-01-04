@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767421259088,
+  "lastUpdate": 1767506932527,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -11291,6 +11291,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco (8.8M docs) - Index Size",
             "value": 1499.4,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@tigerdata.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@tigerdata.com"
+          },
+          "id": "53c50c25080df9321a06fe80065835f9d1487caa",
+          "message": "Fix ParadeDB installation - use GitHub releases\n\nThe packagecloud repo doesn't have pg_search packages. Download\ndirectly from GitHub releases instead.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2026-01-03T05:50:20Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/53c50c25080df9321a06fe80065835f9d1487caa"
+        },
+        "date": 1767506931982,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Build Time",
+            "value": 135899.692,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Short Query (1 word)",
+            "value": 12.034,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Medium Query (3 words)",
+            "value": 19.464,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Long Query (question)",
+            "value": 22.579,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Common Term Query",
+            "value": 10.593,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Rare Term Query",
+            "value": 17.208,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Avg Query Latency (20 queries)",
+            "value": 17.79,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Short Query with Score",
+            "value": 12.237,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Medium Query with Score",
+            "value": 20.63,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Long Query with Score",
+            "value": 22.496,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Rare Term Query with Score",
+            "value": 16.434,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Avg Query Latency with Score",
+            "value": 17.38,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Size",
+            "value": 1427.54,
             "unit": "MB"
           }
         ]
