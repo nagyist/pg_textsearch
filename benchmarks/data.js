@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767656917137,
+  "lastUpdate": 1767657845515,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "msmarco Benchmarks": [
@@ -322,6 +322,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (99.9K docs) - Avg Query Latency with Score",
             "value": 1.01,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - Index Size",
+            "value": 27.07,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@tigerdata.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@tigerdata.com"
+          },
+          "id": "61561e2c3e7e1ebc240d78703213126fb67bc2f9",
+          "message": "Rename paradedb references to systemx for anonymization\n\n- Rename paradedb/ directory to systemx/\n- Rename job from paradedb-benchmark to system-x-benchmark\n- Rename artifact from paradedb-benchmark to system-x-benchmark\n- Rename internal file names (paradedb_metrics.json -> systemx_metrics.json)\n- Rename PostgreSQL objects (tables, indexes, functions) to use systemx suffix\n- Update all workflow step names and comments\n\nThe only remaining \"paradedb\" references are:\n- GitHub download URL (actual package location)\n- paradedb.match() and paradedb.score() SQL API functions (extension schema)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2026-01-05T22:21:24Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/61561e2c3e7e1ebc240d78703213126fb67bc2f9"
+        },
+        "date": 1767657844821,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (99.9K docs) - Index Build Time",
+            "value": 5844.975,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 1 Token Query (p50)",
+            "value": 0.12,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 2 Token Query (p50)",
+            "value": 0.26,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 3 Token Query (p50)",
+            "value": 0.4,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 4 Token Query (p50)",
+            "value": 0.5,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 5 Token Query (p50)",
+            "value": 0.8,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 6 Token Query (p50)",
+            "value": 0.94,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 7 Token Query (p50)",
+            "value": 1.19,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 8+ Token Query (p50)",
+            "value": 1.39,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.71,
             "unit": "ms"
           },
           {
