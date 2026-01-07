@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767757472662,
+  "lastUpdate": 1767760057278,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "msmarco Benchmarks": [
@@ -1761,6 +1761,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
             "value": 0.3,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "87f6ae4508cd1f1d0037ca92ff012ff1e4eecd47",
+          "message": "Add Block-Max WAND (BMW) optimization for top-k queries (#102)\n\n## Summary\n\n- Implement Block-Max WAND (BMW) for top-k retrieval using block-level\nupper bounds in V2 segments\n- Add top-k min-heap with O(1) threshold access and O(log k) updates for\nefficient result tracking\n- BMW fast path for single-term queries (skip blocks that can't\ncontribute to top-k)\n- BMW fast path for multi-term queries with WAND-style doc-ID ordered\ntraversal\n- Batch doc_freq lookups to reduce segment open/close overhead for\nmulti-term queries\n- GUC variables `pg_textsearch.enable_bmw` and `log_bmw_stats` for\ndebugging/benchmarking\n\n## Performance (MS MARCO 8.8M docs, p50 latency)\n\n| Query Length | pg_textsearch | System X | Result |\n|--------------|---------------|----------|--------|\n| 1 token | 10.14ms | 18.05ms | **1.8x faster** |\n| 2 tokens | 12.54ms | 17.24ms | **1.4x faster** |\n| 3 tokens | 15.14ms | 22.94ms | **1.5x faster** |\n| 4 tokens | 19.72ms | 24.01ms | **1.2x faster** |\n| 5 tokens | 25.79ms | 26.21ms | ~same |\n| 6 tokens | 32.88ms | 33.47ms | ~same |\n| 7 tokens | 42.09ms | 32.23ms | 1.3x slower |\n| 8+ tokens | 63.41ms | 39.17ms | 1.6x slower |\n\n**Cranfield:** 225 queries in 57ms (0.26 ms/query avg)\n\n*Note: These benchmarks establish baselines for pg_textsearch—not a\nhead-to-head comparison. System X has different defaults and tuning\noptions; further iteration on configurations required.*\n\n## Implementation Details\n\n**New files:**\n- `src/query/bmw.h` - Top-k heap, BMW stats, and scoring function\ninterfaces\n- `src/query/bmw.c` - Min-heap implementation, block max score\ncomputation, single-term and multi-term BMW scoring\n\n**Key algorithm:**\n1. Compute block max BM25 score from skip entry metadata\n(`block_max_tf`, `block_max_norm`)\n2. Only score blocks where `block_max_score >= current_threshold`\n3. Update threshold as better results are found\n4. Memtable scored exhaustively (no skip index)\n\n**Multi-term optimization:**\n- Sort terms by IDF (highest first) for faster threshold convergence\n- WAND-style doc-ID ordered traversal across terms' posting lists\n- Batch doc_freq lookups: opens each segment once instead of once per\nterm\n- Reduces segment opens from O(terms × segments) to O(segments)\n\n## Testing\n\n- All regression tests pass\n- Shell-based tests pass (concurrency, recovery, segment)\n- Results match exhaustive scoring path with correct tie-breaking\n\n---------\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-01-07T04:07:12Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/87f6ae4508cd1f1d0037ca92ff012ff1e4eecd47"
+        },
+        "date": 1767760056781,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 236.223,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.29,
             "unit": "ms"
           },
           {
