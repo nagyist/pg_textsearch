@@ -103,5 +103,6 @@ window.BRANCH_INFO = {
   "fa9f4cdd2130d551952e99092990ac6d92249ec8": "add-system-y-benchmark",
   "c98d408124b045eb066c88c78a696a96cbcc2872": "add-system-y-benchmark",
   "87f6ae4508cd1f1d0037ca92ff012ff1e4eecd47": "main",
-  "67160fc91c9b962dc729a65e65fd65703f485b02": "main"
+  "67160fc91c9b962dc729a65e65fd65703f485b02": "main",
+  "b6bed92aa94197bd84019616ac05dd2449002d62": "parallel-build"
 };
