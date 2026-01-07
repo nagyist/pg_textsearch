@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767744628324,
+  "lastUpdate": 1767745023760,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "msmarco Benchmarks": [
@@ -1102,6 +1102,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (99.9K docs) - Throughput (800 queries, avg ms/query)",
             "value": 0.69,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - Index Size",
+            "value": 27.07,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "c748e7036ea4d4394f7afbb5411b90bb7898e08d",
+          "message": "Add pg_tokenizer to shared_preload_libraries",
+          "timestamp": "2026-01-07T00:11:34Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/c748e7036ea4d4394f7afbb5411b90bb7898e08d"
+        },
+        "date": 1767745023301,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (99.9K docs) - Index Build Time",
+            "value": 5725.17,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 1 Token Query (p50)",
+            "value": 0.14,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 2 Token Query (p50)",
+            "value": 0.28,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 3 Token Query (p50)",
+            "value": 0.44,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 4 Token Query (p50)",
+            "value": 0.52,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 5 Token Query (p50)",
+            "value": 0.87,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 6 Token Query (p50)",
+            "value": 0.99,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 7 Token Query (p50)",
+            "value": 1.3,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 8+ Token Query (p50)",
+            "value": 1.45,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.7,
             "unit": "ms"
           },
           {
