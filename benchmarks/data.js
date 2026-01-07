@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767766974901,
+  "lastUpdate": 1767766976096,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "msmarco Benchmarks": [
@@ -1564,6 +1564,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Throughput (800 queries, avg ms/query)",
             "value": 32.34,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "67160fc91c9b962dc729a65e65fd65703f485b02",
+          "message": "Add CLAUDE.md to repository (#112)\n\n## Summary\n\n- Adds CLAUDE.md to the repository (previously gitignored)\n- Updates all sections to reflect current codebase state at v0.3.0-dev\n- Documents reorganized source structure with subdirectories\n- Updates GUC parameters and configuration options\n- Documents Block-Max WAND (BMW) query optimization\n- Adds all current test files and CI workflows\n\n## Key Changes\n\n**Source Structure**: Documented the reorganized codebase with:\n- `src/am/` - Access method implementation\n- `src/memtable/` - In-memory index structures\n- `src/segment/` - Disk-based segment storage\n- `src/query/` - Query execution and BMW optimization\n- `src/types/` - SQL data types\n- `src/state/` - Index state management\n- `src/planner/` - Query planner integration\n- `src/debug/` - Debugging utilities\n\n**Configuration**: Updated GUC parameters:\n- `pg_textsearch.default_limit` (was index_memory_limit)\n- `pg_textsearch.enable_bmw` (new)\n- `pg_textsearch.log_bmw_stats` (new)\n- `pg_textsearch.bulk_load_threshold` (new)\n- `pg_textsearch.memtable_spill_threshold` (new)\n- `pg_textsearch.segments_per_level` (new)\n\n**Documentation**: Added sections for:\n- Block-Max WAND optimization\n- All CI workflows (benchmark.yml, nightly-stress.yml,\nupgrade-tests.yml, etc.)\n- New benchmark datasets (MS MARCO, Wikipedia)\n- Debug functions (bm25_dump_index, bm25_summarize_index)\n\n## Testing\n\nN/A - documentation only",
+          "timestamp": "2026-01-07T05:22:13Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/67160fc91c9b962dc729a65e65fd65703f485b02"
+        },
+        "date": 1767766975855,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 542047.914,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 9.64,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 13.42,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 16.25,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 20.86,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 27.02,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 31.93,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 44.13,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 63.12,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Throughput (800 queries, avg ms/query)",
+            "value": 30.76,
             "unit": "ms"
           },
           {
