@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767979174057,
+  "lastUpdate": 1767979175531,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -924,6 +924,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Size",
             "value": 66.75,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "95b2dba0df539c6cee323bc052e28add8b593206",
+          "message": "Fix index size regression from parallel build over-allocation\n\nThe parallel build was pre-allocating pages using a 2.0x expansion factor\nfrom heap size, resulting in massive over-allocation (8.5GB for an index\nthat only needs 2GB of actual data).\n\nTwo fixes:\n1. Reduce expansion factor from 2.0 to 0.6 - text search indexes are\n   typically smaller than the heap, not larger\n2. Add tp_reclaim_unused_pool_pages() to return unused pre-allocated\n   pages to FSM before compaction, so they can be reused\n\nThis should reduce index size from ~8.5GB back to ~2.2GB for MS MARCO.",
+          "timestamp": "2026-01-09T16:54:15Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/95b2dba0df539c6cee323bc052e28add8b593206"
+        },
+        "date": 1767979175238,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (100.0K docs) - Index Build Time",
+            "value": 7775.749,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (100.0K docs) - Index Size",
+            "value": 67.75,
             "unit": "MB"
           }
         ]
