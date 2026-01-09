@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767982434628,
+  "lastUpdate": 1767983691576,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -248,6 +248,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Index Build Time",
             "value": 272.191,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.29,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.02,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "df06537a723c9ad7226870966b05489341636a28",
+          "message": "Revert FSM reclamation, increase expansion factor\n\nRecordFreeIndexPage during parallel build causes buffer ownership errors\n(\"buffer io not owned by resource owner\"). This happens because FSM\noperations conflict with the parallel context's buffer management.\n\nFor now:\n- Increase expansion factor from 0.6 to 1.2 to provide enough pages\n  for parallel builds without needing mid-build FSM reclamation\n- Remove the RecordFreeIndexPage calls that caused crashes\n\nThe index will be somewhat over-allocated, but this can be addressed\nin a follow-up with proper VACUUM-based reclamation after the parallel\ncontext is fully destroyed.",
+          "timestamp": "2026-01-09T17:55:31Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/df06537a723c9ad7226870966b05489341636a28"
+        },
+        "date": 1767983690997,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 234.315,
             "unit": "ms"
           },
           {
