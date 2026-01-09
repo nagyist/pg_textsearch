@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767981136726,
+  "lastUpdate": 1767982434628,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -799,6 +799,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Index Size",
             "value": 2211.21,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "243f47ae58eb723b4853421057e05af6f71250e5",
+          "message": "Add optional segment block compression\n\nImplement delta encoding + bitpacking for posting list compression.\nWhen enabled via `pg_textsearch.compress_segments = on`, new segments\nuse compressed blocks that are ~60-70% smaller than uncompressed.\n\nKey changes:\n- New GUC `pg_textsearch.compress_segments` (default: off)\n- Add compression.c/h with bitpacking encode/decode functions\n- Modify segment write path to optionally compress blocks\n- Modify segment scan path to decompress based on skip entry flags\n- Use TP_BLOCK_FLAG_DELTA flag to indicate compressed blocks\n\nCompression is opt-in and off by default because without SIMD\noptimization, scalar decode (~4-6 GB/s) may not outpace NVMe storage.\nMixed compressed/uncompressed segments are fully supported.\n\nDesign document at docs/compression-design.md covers algorithm choices,\ntradeoff analysis, and future SIMD optimization plans.",
+          "timestamp": "2026-01-09T03:37:45Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/243f47ae58eb723b4853421057e05af6f71250e5"
+        },
+        "date": 1767982433362,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (99.9K docs) - Index Build Time",
+            "value": 5655.451,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 1 Token Query (p50)",
+            "value": 0.15,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 2 Token Query (p50)",
+            "value": 0.2,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 3 Token Query (p50)",
+            "value": 0.24,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 4 Token Query (p50)",
+            "value": 0.29,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 5 Token Query (p50)",
+            "value": 0.38,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 6 Token Query (p50)",
+            "value": 0.45,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 7 Token Query (p50)",
+            "value": 0.59,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - 8+ Token Query (p50)",
+            "value": 0.87,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.4,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (99.9K docs) - Index Size",
+            "value": 15.52,
             "unit": "MB"
           }
         ]
