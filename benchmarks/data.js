@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768075450692,
+  "lastUpdate": 1768077373783,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1330,6 +1330,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Throughput (800 queries, avg ms/query)",
             "value": 34.09,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 1269.35,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "3eb3a6fb137a2fc8bc01da23ecb767d6f23fa08f",
+          "message": "Fix validate-compression job setup\n\nThe Postgres server failed to start because the job was missing:\n- Unix socket directory configuration\n- PGHOST environment variable\n- The -w flag for pg_ctl to wait for startup\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+          "timestamp": "2026-01-10T20:20:24Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/3eb3a6fb137a2fc8bc01da23ecb767d6f23fa08f"
+        },
+        "date": 1768077373208,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 517845.56,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 12.34,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 12.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 15.72,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 20.97,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 27.5,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 33.84,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 43.41,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 68.3,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Throughput (800 queries, avg ms/query)",
+            "value": 33.84,
             "unit": "ms"
           },
           {
