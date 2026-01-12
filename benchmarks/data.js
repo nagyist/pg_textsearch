@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768199098248,
+  "lastUpdate": 1768199100400,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1967,6 +1967,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Size",
             "value": 66.75,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "564b18a6e2fa542e2e37abbf35be189ecbecd6b3",
+          "message": "Implement AMPROP_DISTANCE_ORDERABLE in amproperty (#133)\n\n## Summary\n\nThe `amproperty` callback lets access methods report capabilities that\nPostgres can't infer automatically. For properties like\n`distance_orderable`, Postgres returns NULL if the access method doesn't\nimplement the callback.\n\nSince BM25 indexes support ORDER BY via the `<@>` operator, we should\nreport `distance_orderable = true`. This improves reporting of index\ncapabilities through tools like pgAdmin.\n\nFixes #103\n\n## Testing\nAll existing regression tests pass.",
+          "timestamp": "2026-01-12T03:23:34Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/564b18a6e2fa542e2e37abbf35be189ecbecd6b3"
+        },
+        "date": 1768199099718,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 19166.681,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 36.92,
             "unit": "MB"
           }
         ]
