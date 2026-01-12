@@ -30,5 +30,6 @@ window.BRANCH_INFO = {
   "3eb3a6fb137a2fc8bc01da23ecb767d6f23fa08f": "compression-phase1",
   "8f5bddeda45633e32fa749fef408047667f1e8ce": "parallel-build",
   "bd8e028a841e2ed5919007f573d1ccd96e19bd0e": "parallel-build",
-  "564b18a6e2fa542e2e37abbf35be189ecbecd6b3": "main"
+  "564b18a6e2fa542e2e37abbf35be189ecbecd6b3": "main",
+  "28b0b96866b20e1f3851df2737735347cecc5ce6": "parallel-build"
 };
