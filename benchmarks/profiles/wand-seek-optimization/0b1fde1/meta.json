@@ -1,0 +1,8 @@
+{
+  "sha": "0b1fde1",
+  "full_sha": "0b1fde1605f16cc34b195c41209f76e13c1ac303",
+  "branch": "wand-seek-optimization",
+  "date": "2026-01-13T17:43:26Z",
+  "message": "Use binary search for WAND-style doc ID seeking in BMW",
+  "dataset": "MS MARCO full"
+}
