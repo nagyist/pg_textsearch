@@ -1,0 +1,8 @@
+{
+  "sha": "12e50c2",
+  "full_sha": "12e50c25163c3b715f1f558e6c3111ece9c5cd5a",
+  "branch": "wand-seek-optimization",
+  "date": "2026-01-13T22:55:50Z",
+  "message": "Use insertion sort instead of qsort for term array",
+  "dataset": "MS MARCO full"
+}
