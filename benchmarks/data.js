@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768326479029,
+  "lastUpdate": 1768326481174,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -2207,6 +2207,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Index Size",
             "value": 1269.35,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "fbff39af22ea556ca9cab93b45e437d49a35f9fd",
+          "message": "Add GUC and stats for WAND seek optimization\n\nAdd pg_textsearch.enable_wand_seek GUC to control whether WAND-style\nbinary search seeking is used (default: on). This allows A/B\ncomparison to measure the optimization's impact.\n\nAdd seek statistics to TpBMWStats:\n- seeks_performed: number of binary search seeks\n- docs_seeked: total doc IDs skipped via seeking\n- linear_advances: single-doc advances (no seek benefit)\n- seek_to_same_doc: seeks that landed on same/next doc\n\nThese stats are logged when pg_textsearch.log_bmw_stats=on.\n\nLocal testing shows the current implementation adds overhead without\nbenefit for typical workloads. The find_next_candidate_doc_id call\non every skip appears to cost more than the seeks save.",
+          "timestamp": "2026-01-13T17:35:23Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/fbff39af22ea556ca9cab93b45e437d49a35f9fd"
+        },
+        "date": 1768326480489,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 530127.475,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 13.46,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 11.49,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 13.06,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 17.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 22.24,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 27.06,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 36.38,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 54.49,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Throughput (800 queries, avg ms/query)",
+            "value": 27.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 1274.81,
             "unit": "MB"
           }
         ]
