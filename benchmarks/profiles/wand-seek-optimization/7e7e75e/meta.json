@@ -1,0 +1,8 @@
+{
+  "sha": "7e7e75e",
+  "full_sha": "7e7e75e7ae39399c61ec85606231226baab39232",
+  "branch": "wand-seek-optimization",
+  "date": "2026-01-13T20:16:06Z",
+  "message": "Optimize WAND seek by maintaining sorted term array",
+  "dataset": "MS MARCO full"
+}
