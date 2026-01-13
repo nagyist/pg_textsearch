@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768285314950,
+  "lastUpdate": 1768285317542,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -2373,6 +2373,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Build Time",
             "value": 19166.681,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 36.92,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "411527a28812edbf9a2ccb175811f449ce4278b0",
+          "message": "Release v0.4.0 (#136)\n\n## Summary\n\n- Update version from 0.4.0-dev to 0.4.0\n- Rename SQL files to drop -dev suffix\n- Add CHANGELOG entries for v0.3.0 and v0.4.0\n\n## v0.4.0 Highlights\n\n- **Posting list compression**: Delta encoding + bitpacking for ~41%\nsmaller indexes\n- Coverity static analysis integration\n- AMPROP_DISTANCE_ORDERABLE implementation\n- Fixed 'too many LWLocks taken' error on partitioned tables\n\n## Testing\n\n- `make test` passes (37 tests)\n- `make format-check` passes",
+          "timestamp": "2026-01-13T02:33:01Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/411527a28812edbf9a2ccb175811f449ce4278b0"
+        },
+        "date": 1768285316861,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 19351.723,
             "unit": "ms"
           },
           {
