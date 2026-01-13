@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768342457737,
+  "lastUpdate": 1768342459939,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -3034,6 +3034,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Build Time",
             "value": 19209.985,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 36.92,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "12e50c25163c3b715f1f558e6c3111ece9c5cd5a",
+          "message": "Use insertion sort instead of qsort for term array\n\nProfiling showed qsort was taking 70% of query time due to its\noverhead on small arrays. Insertion sort is O(N) for nearly-sorted\narrays, which is our case since only 1-2 terms move after advancing.\n\nFor N=2-5 terms (typical), this is essentially free compared to qsort.",
+          "timestamp": "2026-01-13T21:55:36Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/12e50c25163c3b715f1f558e6c3111ece9c5cd5a"
+        },
+        "date": 1768342459195,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 17268.505,
             "unit": "ms"
           },
           {
