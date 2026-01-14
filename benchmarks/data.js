@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768374448822,
+  "lastUpdate": 1768374451587,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -3353,6 +3353,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Index Size",
             "value": 1274.75,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "c5a6ea09ab094dd95174f6f7e75d338a680a295d",
+          "message": "Lazy CTID loading for segment queries\n\nDefer CTID resolution until final top-k results are known, reducing\nmemory usage from ~53MB to ~60 bytes per query (for k=10).\n\nChanges:\n- Add tp_segment_open_ex() with load_ctids parameter (default: false)\n- Add tp_segment_lookup_ctid() for targeted 6-byte reads\n- Split heap add into tp_topk_add_memtable/tp_topk_add_segment\n- Add tp_topk_resolve_ctids() to resolve CTIDs before extraction\n- Add doc_id field to TpSegmentPosting for deferred resolution\n- Update iterator to conditionally resolve CTIDs\n- Exhaustive path still loads CTIDs (needed for hash table keys)",
+          "timestamp": "2026-01-14T06:48:20Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/c5a6ea09ab094dd95174f6f7e75d338a680a295d"
+        },
+        "date": 1768374450870,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 548079.069,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 0.9,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 2.34,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 3.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 6.07,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 12.49,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 17.22,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 27.15,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 44.1,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Throughput (800 queries, avg ms/query)",
+            "value": 16.06,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 1271.08,
             "unit": "MB"
           }
         ]
