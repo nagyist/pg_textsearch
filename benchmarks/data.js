@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768358648294,
+  "lastUpdate": 1768371737911,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -803,6 +803,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Index Build Time",
             "value": 232.731,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.29,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.64,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0db7c2097de05330cfbcd89a747e9b04fb9f9d81",
+          "message": "Add pgspot CI workflow for SQL security checks (#145)\n\n## Summary\n- Add GitHub workflow to run pgspot on extension SQL files for security\nchecks\n- Fix PS002 warning by changing `CREATE OR REPLACE` to `CREATE` for\n`bm25_spill_index` function\n- Ignore PS017 warnings (false positives for type/operator definitions\nwithin the extension)\n\n## Testing\n- All 37 regression tests pass\n- pgspot runs clean on all SQL files with `--ignore PS017`",
+          "timestamp": "2026-01-14T04:37:44Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/0db7c2097de05330cfbcd89a747e9b04fb9f9d81"
+        },
+        "date": 1768371737057,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 257.485,
             "unit": "ms"
           },
           {
