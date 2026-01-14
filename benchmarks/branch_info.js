@@ -42,5 +42,6 @@ window.BRANCH_INFO = {
   "7bf2f81d6d4fb80c4b57f62ac0568647ae2b3910": "wand-seek-optimization",
   "b35d8984a0c388e1462efbce055a55e7dcac2dd4": "wand-seek-optimization",
   "0db7c2097de05330cfbcd89a747e9b04fb9f9d81": "main",
-  "c5a6ea09ab094dd95174f6f7e75d338a680a295d": "lazy-ctid-loading"
+  "c5a6ea09ab094dd95174f6f7e75d338a680a295d": "lazy-ctid-loading",
+  "2e3fb41f2e40ab9a600da0cd1738daa0ec6bd9b6": "lazy-ctid-loading"
 };
