@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768544513846,
+  "lastUpdate": 1768544515747,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -4441,6 +4441,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Index Build Time",
             "value": 18723.331,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 36.92,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "id": "75a05c5003b013a45ca4886ea055a175b0c1c351",
+          "message": "Add LSAN suppressions for pg_config false positives\n\nThe nightly stress tests were failing because LSAN detected \"leaks\" in\nPostgreSQL's pg_config utility. These are false positives - pg_config\nis a short-lived command-line tool that allocates memory and exits\nwithout freeing it, which is normal and expected behavior.\n\nAdd suppressions for pg_strdup and get_configdata to fix the failures.",
+          "timestamp": "2026-01-16T05:56:34Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/75a05c5003b013a45ca4886ea055a175b0c1c351"
+        },
+        "date": 1768544515351,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 19193.876,
             "unit": "ms"
           },
           {
