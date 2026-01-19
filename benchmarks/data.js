@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768717312472,
+  "lastUpdate": 1768803797812,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1067,6 +1067,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
             "value": 0.42,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.64,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "efe88321a9fabe17cd60a5adf155d804b1796161",
+          "message": "Fix potential integer overflow in BMW stats tracking (#155)\n\n## Summary\n- Fix Coverity-reported integer overflow (CID 641544) in\n`skip_pivot_document()`\n- Rewrite `landed_doc <= pivot_doc_id + 1` as `landed_doc - pivot_doc_id\n<= 1` to avoid overflow when `pivot_doc_id` equals `UINT32_MAX`\n\n## Testing\n- All SQL regression tests pass",
+          "timestamp": "2026-01-19T01:31:07Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/efe88321a9fabe17cd60a5adf155d804b1796161"
+        },
+        "date": 1768803796578,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 253.022,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.4,
             "unit": "ms"
           },
           {
