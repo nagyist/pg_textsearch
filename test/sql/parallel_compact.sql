@@ -120,3 +120,6 @@ RESET max_parallel_maintenance_workers;
 RESET maintenance_work_mem;
 RESET pg_textsearch.memtable_spill_threshold;
 RESET pg_textsearch.segments_per_level;
+
+-- Clean up extension
+DROP EXTENSION pg_textsearch CASCADE;
