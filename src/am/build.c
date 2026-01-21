@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Tiger Data, Inc.
+ * Copyright (c) 2025-2026 Tiger Data, Inc.
  * Licensed under the PostgreSQL License. See LICENSE for details.
  *
  * am/build.c - BM25 index build, insert, and spill operations
@@ -14,6 +14,7 @@
 #include <miscadmin.h>
 #include <nodes/makefuncs.h>
 #include <nodes/value.h>
+#include <optimizer/optimizer.h>
 #include <storage/bufmgr.h>
 #include <tsearch/ts_type.h>
 #include <utils/backend_progress.h>
@@ -23,6 +24,7 @@
 #include <utils/snapmgr.h>
 
 #include "am.h"
+#include "build_parallel.h"
 #include "constants.h"
 #include "memtable/memtable.h"
 #include "memtable/posting.h"
@@ -89,11 +91,6 @@ tp_auto_spill_if_needed(TpLocalIndexState *index_state, Relation index_rel)
 	if (total_postings < tp_memtable_spill_threshold)
 		return;
 
-	elog(DEBUG1,
-		 "Auto-spill triggered: %ld posting entries >= threshold %d",
-		 (long)total_postings,
-		 tp_memtable_spill_threshold);
-
 	/* Write the segment */
 	segment_root = tp_write_segment(index_state, index_rel);
 
@@ -136,11 +133,6 @@ tp_auto_spill_if_needed(TpLocalIndexState *index_state, Relation index_rel)
 		metap->level_counts[0]++;
 		MarkBufferDirty(metabuf);
 		UnlockReleaseBuffer(metabuf);
-
-		elog(DEBUG1,
-			 "Auto-spilled memtable to segment at block %u (L0 count: %u)",
-			 segment_root,
-			 metap->level_counts[0]);
 
 		/* Check if L0 needs compaction */
 		tp_maybe_compact_level(index_rel, 0);
@@ -740,6 +732,85 @@ tp_build(Relation heap, Relation index, IndexInfo *indexInfo)
 	tp_build_init_metapage(index, text_config_oid, k1, b);
 
 	/*
+	 * Check if parallel build is possible and beneficial.
+	 *
+	 * Postgres has already called plan_create_index_workers() and stored
+	 * the result in indexInfo->ii_ParallelWorkers. We use that value
+	 * directly to avoid redundant planning work and ensure consistency.
+	 *
+	 * We add our own minimum tuple threshold (100K) because for smaller
+	 * tables, the parallel coordination overhead exceeds the benefit.
+	 */
+	{
+		int	   nworkers	 = indexInfo->ii_ParallelWorkers;
+		double reltuples = heap->rd_rel->reltuples;
+
+		/*
+		 * Only consider parallel build for tables with 100K+ estimated rows.
+		 * For smaller tables, the parallel coordination overhead exceeds
+		 * the benefit.
+		 *
+		 * If reltuples is -1 (table never analyzed), estimate from page count.
+		 * We use a conservative estimate of 50 tuples per 8KB page, which
+		 * assumes ~160 bytes per row (reasonable for text search workloads).
+		 */
+#define TP_MIN_PARALLEL_TUPLES		100000
+#define TP_TUPLES_PER_PAGE_ESTIMATE 50
+
+		if (reltuples < 0)
+		{
+			BlockNumber nblocks = RelationGetNumberOfBlocks(heap);
+			reltuples = (double)nblocks * TP_TUPLES_PER_PAGE_ESTIMATE;
+		}
+
+		/*
+		 * Thresholds for warning about suboptimal parallelism.
+		 * These are conservative - we only warn when users could see
+		 * significant (>2x) speedup from more parallelism.
+		 */
+#define TP_WARN_NO_PARALLEL_TUPLES 1000000 /* 1M tuples */
+#define TP_WARN_FEW_WORKERS_TUPLES 5000000 /* 5M tuples */
+#define TP_WARN_FEW_WORKERS_MIN	   2	   /* suggest more if <= this */
+
+		if (nworkers > 0 && reltuples >= TP_MIN_PARALLEL_TUPLES)
+		{
+			/*
+			 * Warn if table is very large but parallelism is limited.
+			 * Users may not realize max_parallel_maintenance_workers
+			 * constrains index build parallelism.
+			 */
+			if (reltuples >= TP_WARN_FEW_WORKERS_TUPLES &&
+				nworkers <= TP_WARN_FEW_WORKERS_MIN)
+			{
+				elog(NOTICE,
+					 "Large table (%.0f tuples) with only %d parallel "
+					 "workers. "
+					 "Consider increasing max_parallel_maintenance_workers "
+					 "for "
+					 "faster index builds.",
+					 reltuples,
+					 nworkers);
+			}
+
+			return tp_build_parallel(
+					heap, index, indexInfo, text_config_oid, k1, b, nworkers);
+		}
+
+		if (reltuples >= TP_WARN_NO_PARALLEL_TUPLES && nworkers == 0)
+		{
+			/*
+			 * Large table but no parallel workers available.
+			 * This is likely due to max_parallel_maintenance_workers = 0.
+			 */
+			elog(NOTICE,
+				 "Large table (%.0f tuples) but parallel build disabled. "
+				 "Set max_parallel_maintenance_workers > 0 for faster index "
+				 "builds.",
+				 reltuples);
+		}
+	}
+
+	/*
 	 * Initialize index state in BUILD mode with private DSA.
 	 * The private DSA will be destroyed and recreated on each spill,
 	 * providing perfect memory reclamation.
@@ -838,9 +909,6 @@ tp_build(Relation heap, Relation index, IndexInfo *indexInfo)
 			 b);
 	}
 
-	/* Report FSM page reuse statistics */
-	tp_report_fsm_stats();
-
 	/*
 	 * Final spill: Write any remaining memtable data to disk segment.
 	 * This must happen BEFORE destroying the private DSA, otherwise all
@@ -855,10 +923,6 @@ tp_build(Relation heap, Relation index, IndexInfo *indexInfo)
 			Buffer			metabuf;
 			Page			metapage;
 			TpIndexMetaPage metap;
-
-			elog(DEBUG1,
-				 "BUILD MODE: Final spill of %ld posting entries",
-				 (long)memtable->total_postings);
 
 			segment_root = tp_write_segment(index_state, index);
 
@@ -891,10 +955,6 @@ tp_build(Relation heap, Relation index, IndexInfo *indexInfo)
 				metap->level_counts[0]++;
 				MarkBufferDirty(metabuf);
 				UnlockReleaseBuffer(metabuf);
-
-				elog(DEBUG1,
-					 "BUILD MODE: Final segment written at block %u",
-					 segment_root);
 			}
 		}
 	}
