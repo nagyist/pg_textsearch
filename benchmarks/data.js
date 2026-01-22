@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768976513042,
+  "lastUpdate": 1769062817956,
   "repoUrl": "https://github.com/timescale/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -1178,6 +1178,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
             "value": 0.45,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Index Size",
+            "value": 0.64,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "bde408ca9e72fca686e47ef360cee27c217d2ab8",
+          "message": "Add parallel bulk index build support, part 1/2 (#114)\n\n## Summary\n\n- Implement parallel CREATE INDEX using Postgres parallel infrastructure\n- Each worker scans heap concurrently, builds local memtables, writes L0\nsegments\n- Leader participates as worker 0; links all worker segment chains at\nend\n- Compaction performed on leader node; part 2/2 will parallelize\ncompaction\n\n## Testing\n\n- All 33 regression tests pass\n- Falls back to serial when `max_parallel_maintenance_workers=0`",
+          "timestamp": "2026-01-21T19:00:51Z",
+          "url": "https://github.com/timescale/pg_textsearch/commit/bde408ca9e72fca686e47ef360cee27c217d2ab8"
+        },
+        "date": 1769062817376,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "cranfield (1.3K docs) - Index Build Time",
+            "value": 266.615,
+            "unit": "ms"
+          },
+          {
+            "name": "cranfield (1.3K docs) - Throughput (800 queries, avg ms/query)",
+            "value": 0.43,
             "unit": "ms"
           },
           {
