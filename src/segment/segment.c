@@ -601,6 +601,7 @@ allocate_segment_page(Relation index)
 	block = GetFreeIndexPage(index);
 	if (block != InvalidBlockNumber)
 	{
+		elog(DEBUG1, "allocate_segment_page: FSM returned block %u", block);
 		buffer = ReadBuffer(index, block);
 		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 		PageInit(BufferGetPage(buffer), BLCKSZ, 0);
@@ -613,6 +614,7 @@ allocate_segment_page(Relation index)
 	buffer = ReadBufferExtended(
 			index, MAIN_FORKNUM, P_NEW, RBM_ZERO_AND_LOCK, NULL);
 	block = BufferGetBlockNumber(buffer);
+	elog(DEBUG1, "allocate_segment_page: extended to block %u", block);
 	PageInit(BufferGetPage(buffer), BLCKSZ, 0);
 	MarkBufferDirty(buffer);
 	UnlockReleaseBuffer(buffer);

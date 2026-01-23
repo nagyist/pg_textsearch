@@ -288,9 +288,12 @@ reclaim_unused_pool_pages(Relation index, TpParallelBuildShared *shared)
 	if (pages_reclaimed > 0)
 		IndexFreeSpaceMapVacuum(index);
 
-	elog(DEBUG1,
-		 "Parallel build: reclaimed %u unused pool pages to FSM",
-		 pages_reclaimed);
+	elog(NOTICE,
+		 "Parallel build: reclaimed %u unused pool pages to FSM "
+		 "(pool_used=%u, pool_total=%u)",
+		 pages_reclaimed,
+		 pool_used,
+		 pool_total);
 }
 
 /*
@@ -390,6 +393,94 @@ tp_build_parallel(
 
 	/* Finalize statistics in metapage */
 	tp_finalize_parallel_stats(shared, index);
+
+	/*
+	 * Truncate trailing free pages from the index.
+	 *
+	 * After compaction, L0 segment pages are freed to FSM but the relation
+	 * has already been extended for L1. We find the highest block used by
+	 * any segment and truncate everything after it.
+	 */
+	{
+		Buffer			metabuf;
+		Page			metapage;
+		TpIndexMetaPage metap;
+		BlockNumber		nblocks;
+		BlockNumber		max_used_block = 0;
+		int				level;
+
+		metabuf	 = ReadBuffer(index, 0);
+		LockBuffer(metabuf, BUFFER_LOCK_SHARE);
+		metapage = BufferGetPage(metabuf);
+		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
+
+		/*
+		 * Find highest block used by any segment.
+		 *
+		 * With FSM-based page allocation (used during compaction), segment
+		 * pages can be scattered throughout the index. We must collect all
+		 * actual block numbers rather than assuming contiguous allocation.
+		 */
+		for (level = 0; level < TP_MAX_LEVELS; level++)
+		{
+			BlockNumber seg_head = metap->level_heads[level];
+
+			while (seg_head != InvalidBlockNumber)
+			{
+				BlockNumber *seg_pages;
+				uint32		 seg_page_count;
+				uint32		 j;
+				Buffer		 seg_buf;
+				Page		 seg_page;
+				TpSegmentHeader *header;
+				BlockNumber	 next_seg;
+
+				/*
+				 * Collect all pages (data + page index) from this segment.
+				 * This properly handles scattered pages from FSM allocation.
+				 */
+				seg_page_count = tp_segment_collect_pages(
+						index, seg_head, &seg_pages);
+
+				for (j = 0; j < seg_page_count; j++)
+				{
+					if (seg_pages[j] > max_used_block)
+						max_used_block = seg_pages[j];
+				}
+
+				if (seg_pages)
+					pfree(seg_pages);
+
+				/* Get next segment pointer */
+				seg_buf	 = ReadBuffer(index, seg_head);
+				seg_page = BufferGetPage(seg_buf);
+				header	 = (TpSegmentHeader *)((char *)seg_page +
+											 SizeOfPageHeaderData);
+				next_seg = header->next_segment;
+				ReleaseBuffer(seg_buf);
+
+				seg_head = next_seg;
+			}
+		}
+
+		UnlockReleaseBuffer(metabuf);
+
+		/* Truncate if there are trailing unused pages */
+		nblocks = RelationGetNumberOfBlocks(index);
+		if (max_used_block > 0 && max_used_block + 1 < nblocks)
+		{
+			BlockNumber new_nblocks = max_used_block + 1;
+
+			elog(NOTICE,
+				 "Parallel build: truncating %u trailing free pages "
+				 "(nblocks %u -> %u)",
+				 nblocks - new_nblocks,
+				 nblocks,
+				 new_nblocks);
+
+			RelationTruncate(index, new_nblocks);
+		}
+	}
 
 	/* Build result */
 	result				 = palloc0(sizeof(IndexBuildResult));
