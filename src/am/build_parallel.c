@@ -409,7 +409,7 @@ tp_build_parallel(
 		BlockNumber		max_used_block = 0;
 		int				level;
 
-		metabuf	 = ReadBuffer(index, 0);
+		metabuf = ReadBuffer(index, 0);
 		LockBuffer(metabuf, BUFFER_LOCK_SHARE);
 		metapage = BufferGetPage(metabuf);
 		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
@@ -427,20 +427,20 @@ tp_build_parallel(
 
 			while (seg_head != InvalidBlockNumber)
 			{
-				BlockNumber *seg_pages;
-				uint32		 seg_page_count;
-				uint32		 j;
-				Buffer		 seg_buf;
-				Page		 seg_page;
+				BlockNumber		*seg_pages;
+				uint32			 seg_page_count;
+				uint32			 j;
+				Buffer			 seg_buf;
+				Page			 seg_page;
 				TpSegmentHeader *header;
-				BlockNumber	 next_seg;
+				BlockNumber		 next_seg;
 
 				/*
 				 * Collect all pages (data + page index) from this segment.
 				 * This properly handles scattered pages from FSM allocation.
 				 */
-				seg_page_count = tp_segment_collect_pages(
-						index, seg_head, &seg_pages);
+				seg_page_count =
+						tp_segment_collect_pages(index, seg_head, &seg_pages);
 
 				for (j = 0; j < seg_page_count; j++)
 				{
@@ -455,7 +455,7 @@ tp_build_parallel(
 				seg_buf	 = ReadBuffer(index, seg_head);
 				seg_page = BufferGetPage(seg_buf);
 				header	 = (TpSegmentHeader *)((char *)seg_page +
-											 SizeOfPageHeaderData);
+											   SizeOfPageHeaderData);
 				next_seg = header->next_segment;
 				ReleaseBuffer(seg_buf);
 
@@ -1470,8 +1470,10 @@ tp_pool_get_page(
 	if (pg_atomic_exchange_u32(&shared->pool_exhausted, 1) == 0)
 	{
 		elog(NOTICE,
-			 "Parallel build pool exhausted (%d pages), extending dynamically. "
-			 "Consider increasing pg_textsearch.parallel_build_expansion_factor "
+			 "Parallel build pool exhausted (%d pages), extending "
+			 "dynamically. "
+			 "Consider increasing "
+			 "pg_textsearch.parallel_build_expansion_factor "
 			 "(currently %.1f) to avoid this overhead.",
 			 shared->total_pool_pages,
 			 tp_parallel_build_expansion_factor);
@@ -1492,8 +1494,8 @@ tp_pool_get_page(
 			current_max = pg_atomic_read_u32(&shared->max_block_used);
 			if (block <= current_max)
 				break;
-		} while (
-				!pg_atomic_compare_exchange_u32(&shared->max_block_used, &current_max, block));
+		} while (!pg_atomic_compare_exchange_u32(
+				&shared->max_block_used, &current_max, block));
 	}
 
 	return block;
