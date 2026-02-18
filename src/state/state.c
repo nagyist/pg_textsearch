@@ -263,11 +263,9 @@ tp_create_shared_index_state(Oid index_oid, Oid heap_oid)
 	/* Register in global registry */
 	if (!tp_registry_register(index_oid, shared_state, shared_dp))
 	{
-		/* If registration failed, try initializing the registry first */
 		tp_registry_shmem_startup();
 		if (!tp_registry_register(index_oid, shared_state, shared_dp))
 		{
-			/* Clean up allocations on failure */
 			dsa_free(dsa, memtable_dp);
 			dsa_free(dsa, shared_dp);
 			elog(ERROR, "Failed to register index %u", index_oid);

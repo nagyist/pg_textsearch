@@ -1365,7 +1365,6 @@ static void
 tp_set_rel_pathlist_hook(
 		PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte)
 {
-	/* Call previous hook first */
 	if (prev_set_rel_pathlist_hook)
 		prev_set_rel_pathlist_hook(root, rel, rti, rte);
 

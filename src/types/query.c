@@ -991,7 +991,6 @@ bm25_text_bm25query_score(PG_FUNCTION_ARGS)
 	}
 	PG_CATCH();
 	{
-		/* Clean up on error */
 		if (metap)
 			pfree(metap);
 		if (index_rel)

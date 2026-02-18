@@ -360,30 +360,6 @@ tp_add_docid_to_pages(Relation index, ItemPointer ctid)
 }
 
 /*
- * Update metapage statistics
- * This is used when flushing to update global stats
- */
-void
-tp_update_metapage_stats(Relation index, int32 doc_delta, int64 len_delta)
-{
-	Buffer			metabuf;
-	Page			metapage;
-	TpIndexMetaPage metap;
-
-	metabuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
-	LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
-	metapage = BufferGetPage(metabuf);
-	metap	 = (TpIndexMetaPage)PageGetContents(metapage);
-
-	metap->total_docs += doc_delta;
-	metap->total_len += len_delta;
-
-	MarkBufferDirty(metabuf);
-	FlushOneBuffer(metabuf);
-	UnlockReleaseBuffer(metabuf);
-}
-
-/*
  * Clear all docid pages after successful flush to segment
  * This prevents stale docids from being used during recovery
  */
