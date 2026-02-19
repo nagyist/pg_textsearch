@@ -1,4 +1,4 @@
--- Upgrade from 0.5.0 to 1.0.0-dev
+-- Upgrade from 0.5.1 to 1.0.0-dev
 --
 -- Starting with 1.0.0-dev, the shared library includes the version in
 -- its filename (e.g., pg_textsearch-1.0.0-dev.so). All C functions must
