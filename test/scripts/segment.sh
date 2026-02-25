@@ -46,6 +46,8 @@ setup_test_db() {
 
     initdb -D "${DATA_DIR}" --auth-local=trust --auth-host=trust >/dev/null 2>&1
 
+    local lib_name="pg_textsearch"
+
     cat >> "${DATA_DIR}/postgresql.conf" << EOF
 port = ${TEST_PORT}
 max_connections = 20
@@ -53,6 +55,7 @@ shared_buffers = 128MB
 unix_socket_directories = '${DATA_DIR}'
 listen_addresses = 'localhost'
 log_min_messages = warning
+shared_preload_libraries = '${lib_name}'
 EOF
 
     pg_ctl start -D "${DATA_DIR}" -l "${LOGFILE}" -w || error "Failed to start PostgreSQL"

@@ -54,6 +54,8 @@ setup_test_db() {
     # Initialize test cluster
     initdb -D "${DATA_DIR}" --auth-local=trust --auth-host=trust >/dev/null 2>&1
 
+    local lib_name="pg_textsearch"
+
     # Configure test instance
     cat >> "${DATA_DIR}/postgresql.conf" << EOF
 port = ${TEST_PORT}
@@ -63,6 +65,7 @@ max_connections = 20
 log_min_messages = notice
 logging_collector = on
 log_filename = 'postgres.log'
+shared_preload_libraries = '${lib_name}'
 EOF
 
     # Start PostgreSQL
