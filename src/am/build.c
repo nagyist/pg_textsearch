@@ -8,6 +8,7 @@
 
 #include <access/tableam.h>
 #include <catalog/namespace.h>
+#include <catalog/storage.h>
 #include <commands/progress.h>
 #include <executor/spi.h>
 #include <math.h>
@@ -24,6 +25,7 @@
 #include <utils/snapmgr.h>
 
 #include "am.h"
+#include "build_context.h"
 #include "build_parallel.h"
 #include "constants.h"
 #include "memtable/memtable.h"
@@ -31,6 +33,7 @@
 #include "memtable/stringtable.h"
 #include "segment/merge.h"
 #include "segment/segment.h"
+#include "segment/segment_io.h"
 #include "state/metapage.h"
 #include "state/state.h"
 #include "types/vector.h"
@@ -158,32 +161,7 @@ tp_auto_spill_if_needed(TpLocalIndexState *index_state, Relation index_rel)
 		 */
 		tp_clear_docid_pages(index_rel);
 
-		/* Link new segment as L0 chain head */
-		metabuf = ReadBuffer(index_rel, 0);
-		LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
-		metapage = BufferGetPage(metabuf);
-		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
-
-		if (metap->level_heads[0] != InvalidBlockNumber)
-		{
-			/* Point new segment to old chain head */
-			Buffer			 seg_buf;
-			Page			 seg_page;
-			TpSegmentHeader *seg_header;
-
-			seg_buf = ReadBuffer(index_rel, segment_root);
-			LockBuffer(seg_buf, BUFFER_LOCK_EXCLUSIVE);
-			seg_page   = BufferGetPage(seg_buf);
-			seg_header = (TpSegmentHeader *)PageGetContents(seg_page);
-			seg_header->next_segment = metap->level_heads[0];
-			MarkBufferDirty(seg_buf);
-			UnlockReleaseBuffer(seg_buf);
-		}
-
-		metap->level_heads[0] = segment_root;
-		metap->level_counts[0]++;
-		MarkBufferDirty(metabuf);
-		UnlockReleaseBuffer(metabuf);
+		tp_link_l0_chain_head(index_rel, segment_root);
 
 		/* Check if L0 needs compaction */
 		pgstat_progress_update_param(
@@ -192,6 +170,117 @@ tp_auto_spill_if_needed(TpLocalIndexState *index_state, Relation index_rel)
 		pgstat_progress_update_param(
 				PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_LOADING);
 	}
+}
+
+/*
+ * Flush build context to a segment and link as L0 chain head.
+ * Used during serial CREATE INDEX with arena-based build.
+ */
+static void
+tp_build_flush_and_link(TpBuildContext *ctx, Relation index)
+{
+	BlockNumber segment_root;
+
+	segment_root = tp_write_segment_from_build_ctx(ctx, index);
+	if (segment_root == InvalidBlockNumber)
+		return;
+
+	tp_link_l0_chain_head(index, segment_root);
+}
+
+/*
+ * Link a newly-written segment as the L0 chain head.
+ *
+ * Reads the metapage, points the new segment's next_segment at the
+ * current L0 head, then updates the metapage head and count.
+ */
+void
+tp_link_l0_chain_head(Relation index, BlockNumber segment_root)
+{
+	Buffer			metabuf;
+	Page			metapage;
+	TpIndexMetaPage metap;
+
+	metabuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
+	LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
+	metapage = BufferGetPage(metabuf);
+	metap	 = (TpIndexMetaPage)PageGetContents(metapage);
+
+	if (metap->level_heads[0] != InvalidBlockNumber)
+	{
+		Buffer			 seg_buf;
+		Page			 seg_page;
+		TpSegmentHeader *seg_header;
+
+		seg_buf = ReadBuffer(index, segment_root);
+		LockBuffer(seg_buf, BUFFER_LOCK_EXCLUSIVE);
+		seg_page   = BufferGetPage(seg_buf);
+		seg_header = (TpSegmentHeader *)PageGetContents(seg_page);
+		seg_header->next_segment = metap->level_heads[0];
+		MarkBufferDirty(seg_buf);
+		UnlockReleaseBuffer(seg_buf);
+	}
+
+	metap->level_heads[0] = segment_root;
+	metap->level_counts[0]++;
+	MarkBufferDirty(metabuf);
+	UnlockReleaseBuffer(metabuf);
+}
+
+/*
+ * Truncate dead pages from an index relation.
+ *
+ * Walks all segment chains via the metapage to find the highest
+ * block still in use, then truncates everything beyond it.
+ * This reclaims pages freed by compaction (which sit below the
+ * high-water mark) and unused pool margin from parallel builds.
+ */
+void
+tp_truncate_dead_pages(Relation index)
+{
+	Buffer			metabuf;
+	Page			metapage;
+	TpIndexMetaPage metap;
+	BlockNumber		max_used = 1; /* at least metapage */
+	BlockNumber		nblocks;
+	int				level;
+
+	metabuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
+	LockBuffer(metabuf, BUFFER_LOCK_SHARE);
+	metapage = BufferGetPage(metabuf);
+	metap	 = (TpIndexMetaPage)PageGetContents(metapage);
+
+	for (level = 0; level < TP_MAX_LEVELS; level++)
+	{
+		BlockNumber seg = metap->level_heads[level];
+
+		while (seg != InvalidBlockNumber)
+		{
+			TpSegmentReader *reader;
+			BlockNumber		*pages;
+			uint32			 num_pages;
+			uint32			 i;
+
+			num_pages = tp_segment_collect_pages(index, seg, &pages);
+			for (i = 0; i < num_pages; i++)
+			{
+				if (pages[i] + 1 > max_used)
+					max_used = pages[i] + 1;
+			}
+			if (pages)
+				pfree(pages);
+
+			reader = tp_segment_open(index, seg);
+			seg	   = reader->header->next_segment;
+			tp_segment_close(reader);
+		}
+	}
+
+	UnlockReleaseBuffer(metabuf);
+
+	nblocks = RelationGetNumberOfBlocks(index);
+	if (max_used < nblocks)
+		RelationTruncate(index, max_used);
 }
 
 /*
@@ -245,39 +334,9 @@ tp_spill_memtable(PG_FUNCTION_ARGS)
 	/* Clear the memtable after successful spilling */
 	if (segment_root != InvalidBlockNumber)
 	{
-		Buffer			metabuf;
-		Page			metapage;
-		TpIndexMetaPage metap;
-
 		tp_clear_memtable(index_state);
 
-		/* Link new segment as L0 chain head */
-		metabuf = ReadBuffer(index_rel, 0);
-		LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
-		metapage = BufferGetPage(metabuf);
-		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
-
-		if (metap->level_heads[0] != InvalidBlockNumber)
-		{
-			/* Point new segment to old chain head */
-			Buffer			 seg_buf;
-			Page			 seg_page;
-			TpSegmentHeader *seg_header;
-
-			seg_buf = ReadBuffer(index_rel, segment_root);
-			LockBuffer(seg_buf, BUFFER_LOCK_EXCLUSIVE);
-			seg_page   = BufferGetPage(seg_buf);
-			seg_header = (TpSegmentHeader *)PageGetContents(seg_page);
-			seg_header->next_segment = metap->level_heads[0];
-			MarkBufferDirty(seg_buf);
-			UnlockReleaseBuffer(seg_buf);
-		}
-
-		metap->level_heads[0] = segment_root;
-		metap->level_counts[0]++;
-		MarkBufferDirty(metabuf);
-
-		UnlockReleaseBuffer(metabuf);
+		tp_link_l0_chain_head(index_rel, segment_root);
 
 		/* Check if L0 needs compaction */
 		tp_maybe_compact_level(index_rel, 0);
@@ -298,6 +357,41 @@ tp_spill_memtable(PG_FUNCTION_ARGS)
 	{
 		PG_RETURN_NULL();
 	}
+}
+
+PG_FUNCTION_INFO_V1(tp_force_merge);
+
+/*
+ * SQL-callable: bm25_force_merge(index_name text) → void
+ *
+ * Force-merge all segments into a single segment, à la Lucene's
+ * forceMerge(1).  Useful after parallel index build or when
+ * benchmarking with a single-segment layout.
+ */
+Datum
+tp_force_merge(PG_FUNCTION_ARGS)
+{
+	text	 *index_name_text = PG_GETARG_TEXT_PP(0);
+	char	 *index_name	  = text_to_cstring(index_name_text);
+	Oid		  index_oid;
+	Relation  index_rel;
+	RangeVar *rv;
+
+	rv = makeRangeVarFromNameList(stringToQualifiedNameList(index_name, NULL));
+	index_oid = RangeVarGetRelid(rv, AccessShareLock, false);
+
+	if (!OidIsValid(index_oid))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("index \"%s\" does not exist", index_name)));
+
+	index_rel = index_open(index_oid, RowExclusiveLock);
+	tp_force_merge_all(index_rel);
+	tp_truncate_dead_pages(index_rel);
+
+	index_close(index_rel, RowExclusiveLock);
+
+	PG_RETURN_VOID();
 }
 
 /*
@@ -452,50 +546,10 @@ tp_calculate_idf_sum(TpLocalIndexState *index_state)
 }
 
 /*
- * Helper: Finalize build and update statistics
- */
-static void
-tp_build_finalize_and_update_stats(
-		Relation		   index,
-		TpLocalIndexState *index_state,
-		uint64			  *total_docs,
-		uint64			  *total_len)
-{
-	Buffer			metabuf;
-	Page			metapage;
-	TpIndexMetaPage metap;
-
-	Assert(index_state != NULL);
-
-	/* Calculate IDF sum for average IDF computation */
-	tp_calculate_idf_sum(index_state);
-
-	/* Get actual statistics from the shared state */
-	*total_docs = index_state->shared->total_docs;
-	*total_len	= index_state->shared->total_len;
-
-	/* Update metapage with computed statistics */
-	metabuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
-	LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
-	metapage = BufferGetPage(metabuf);
-	metap	 = (TpIndexMetaPage)PageGetContents(metapage);
-
-	metap->total_docs = *total_docs;
-	metap->total_len  = *total_len;
-
-	MarkBufferDirty(metabuf);
-
-	/* Flush metapage to disk immediately to ensure crash recovery works */
-	FlushOneBuffer(metabuf);
-
-	UnlockReleaseBuffer(metabuf);
-}
-
-/*
  * Extract terms and frequencies from a TSVector
  * Returns the document length (sum of all term frequencies)
  */
-static int
+int
 tp_extract_terms_from_tsvector(
 		TSVector tsvector,
 		char  ***terms_out,
@@ -676,60 +730,6 @@ tp_process_document_text(
 }
 
 /*
- * Process a single document during index build
- * Returns true if document was processed successfully, false to skip
- */
-static bool
-tp_process_document(
-		TupleTableSlot	  *slot,
-		IndexInfo		  *indexInfo,
-		Oid				   text_config_oid,
-		TpLocalIndexState *index_state,
-		Relation		   index,
-		uint64			  *total_docs)
-{
-	bool		isnull;
-	Datum		text_datum;
-	text	   *document_text;
-	ItemPointer ctid;
-	int32		doc_length;
-
-	/* Get the text column value (first indexed column) */
-	text_datum =
-			slot_getattr(slot, indexInfo->ii_IndexAttrNumbers[0], &isnull);
-
-	if (isnull)
-		return false; /* Skip NULL documents */
-
-	document_text = DatumGetTextPP(text_datum);
-
-	/* Ensure the slot is materialized to get the TID */
-	slot_getallattrs(slot);
-	ctid = &slot->tts_tid;
-
-	/* Process the document text using shared helper */
-	if (!tp_process_document_text(
-				document_text,
-				ctid,
-				text_config_oid,
-				index_state,
-				index,
-				&doc_length))
-	{
-		return false;
-	}
-
-	/*
-	 * Skip docid pages during bulk build - they're only needed for crash
-	 * recovery during normal inserts. CREATE INDEX is atomic so if it fails,
-	 * the entire index is discarded.
-	 */
-
-	(*total_docs)++;
-	return true;
-}
-
-/*
  * Build a new Tapir index
  */
 IndexBuildResult *
@@ -835,7 +835,8 @@ tp_build(Relation heap, Relation index, IndexInfo *indexInfo)
 #define TP_WARN_FEW_WORKERS_TUPLES 5000000 /* 5M tuples */
 #define TP_WARN_FEW_WORKERS_MIN	   2	   /* suggest more if <= this */
 
-		if (nworkers > 0 && reltuples >= TP_MIN_PARALLEL_TUPLES)
+		if (nworkers > 0 && reltuples >= TP_MIN_PARALLEL_TUPLES &&
+			!indexInfo->ii_Concurrent)
 		{
 			IndexBuildResult *par_result;
 
@@ -903,158 +904,225 @@ tp_build(Relation heap, Relation index, IndexInfo *indexInfo)
 	}
 
 	/*
-	 * Initialize index state in BUILD mode with private DSA.
-	 * The private DSA will be destroyed and recreated on each spill,
-	 * providing perfect memory reclamation.
-	 */
-	index_state = tp_create_build_index_state(
-			RelationGetRelid(index), RelationGetRelid(heap));
-
-	/* Report loading phase */
-	pgstat_progress_update_param(
-			PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_LOADING);
-
-	/*
-	 * Report estimated tuple count for progress tracking.
-	 * Use reltuples for estimate (may be -1 if never analyzed).
+	 * Serial build using arena-based build context.
+	 *
+	 * This replaces the DSA memtable with a process-local arena + EXPULL
+	 * structure for O(1) allocation and budget-controlled flushing.
+	 * maintenance_work_mem controls the per-batch memory budget.
 	 */
 	{
-		double reltuples  = heap->rd_rel->reltuples;
-		int64  tuples_est = (reltuples > 0) ? (int64)reltuples : 0;
+		TpBuildContext *build_ctx;
+		MemoryContext	build_tmpctx;
+		MemoryContext	oldctx;
+		Size			budget;
+		uint64			tuples_done = 0;
+
+		/*
+		 * Still create build index state for:
+		 * - Per-index LWLock infrastructure
+		 * - Post-build transition to runtime mode
+		 * - Shared state initialization for runtime queries
+		 */
+		index_state = tp_create_build_index_state(
+				RelationGetRelid(index), RelationGetRelid(heap));
+
+		/* Budget: maintenance_work_mem (in KB) -> bytes */
+		budget	  = (Size)maintenance_work_mem * 1024L;
+		build_ctx = tp_build_context_create(budget);
+
+		/*
+		 * Per-document memory context for tokenization temporaries.
+		 * Reset after each document to prevent unbounded growth
+		 * from to_tsvector_byid allocations.
+		 */
+		build_tmpctx = AllocSetContextCreate(
+				CurrentMemoryContext,
+				"build per-doc temp",
+				ALLOCSET_DEFAULT_SIZES);
+
+		/* Report loading phase */
+		pgstat_progress_update_param(
+				PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_LOADING);
+
+		{
+			double reltuples  = heap->rd_rel->reltuples;
+			int64  tuples_est = (reltuples > 0) ? (int64)reltuples : 0;
+
+			pgstat_progress_update_param(
+					PROGRESS_CREATEIDX_TUPLES_TOTAL, tuples_est);
+		}
+
+		/* Prepare to scan table */
+		snapshot = tp_setup_table_scan(heap, &scan, &slot);
+
+		/* Process each document */
+		while (table_scan_getnextslot(scan, ForwardScanDirection, slot))
+		{
+			bool		isnull;
+			Datum		text_datum;
+			text	   *document_text;
+			ItemPointer ctid;
+			Datum		tsvector_datum;
+			TSVector	tsvector;
+			char	  **terms;
+			int32	   *frequencies;
+			int			term_count;
+			int			doc_length;
+
+			text_datum = slot_getattr(
+					slot, indexInfo->ii_IndexAttrNumbers[0], &isnull);
+			if (isnull)
+				continue;
+
+			document_text = DatumGetTextPP(text_datum);
+			slot_getallattrs(slot);
+			ctid = &slot->tts_tid;
+
+			if (!ItemPointerIsValid(ctid))
+				continue;
+
+			/*
+			 * Tokenize in temporary context to prevent
+			 * to_tsvector_byid memory from accumulating.
+			 */
+			oldctx = MemoryContextSwitchTo(build_tmpctx);
+
+			tsvector_datum = DirectFunctionCall2Coll(
+					to_tsvector_byid,
+					InvalidOid,
+					ObjectIdGetDatum(text_config_oid),
+					PointerGetDatum(document_text));
+			tsvector = DatumGetTSVector(tsvector_datum);
+
+			doc_length = tp_extract_terms_from_tsvector(
+					tsvector, &terms, &frequencies, &term_count);
+
+			MemoryContextSwitchTo(oldctx);
+
+			if (term_count > 0)
+			{
+				tp_build_context_add_document(
+						build_ctx,
+						terms,
+						frequencies,
+						term_count,
+						doc_length,
+						ctid);
+			}
+
+			/* Reset per-doc context (frees tsvector, terms) */
+			MemoryContextReset(build_tmpctx);
+
+			/* Budget-based flush */
+			if (tp_build_context_should_flush(build_ctx))
+			{
+				total_docs += build_ctx->num_docs;
+				total_len += build_ctx->total_len;
+
+				tp_build_flush_and_link(build_ctx, index);
+				tp_build_context_reset(build_ctx);
+
+				pgstat_progress_update_param(
+						PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_COMPACTING);
+				tp_maybe_compact_level(index, 0);
+				pgstat_progress_update_param(
+						PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_LOADING);
+			}
+
+			tuples_done++;
+			if (tuples_done % TP_PROGRESS_REPORT_INTERVAL == 0)
+			{
+				pgstat_progress_update_param(
+						PROGRESS_CREATEIDX_TUPLES_DONE, tuples_done);
+				CHECK_FOR_INTERRUPTS();
+			}
+		}
+
+		/* Accumulate final batch stats */
+		total_docs += build_ctx->num_docs;
+		total_len += build_ctx->total_len;
 
 		pgstat_progress_update_param(
-				PROGRESS_CREATEIDX_TUPLES_TOTAL, tuples_est);
-	}
+				PROGRESS_CREATEIDX_TUPLES_DONE, tuples_done);
 
-	/* Prepare to scan table */
-	snapshot = tp_setup_table_scan(heap, &scan, &slot);
-
-	/* Process each document in the heap */
-	while (table_scan_getnextslot(scan, ForwardScanDirection, slot))
-	{
-		tp_process_document(
-				slot,
-				indexInfo,
-				text_config_oid,
-				index_state,
-				index,
-				&total_docs);
-
-		/* Report progress every TP_PROGRESS_REPORT_INTERVAL tuples */
-		if (total_docs % TP_PROGRESS_REPORT_INTERVAL == 0)
-		{
-			pgstat_progress_update_param(
-					PROGRESS_CREATEIDX_TUPLES_DONE, total_docs);
-
-			/* Allow query cancellation */
-			CHECK_FOR_INTERRUPTS();
-		}
-	}
-
-	/* Report final tuple count */
-	pgstat_progress_update_param(PROGRESS_CREATEIDX_TUPLES_DONE, total_docs);
-
-	ExecDropSingleTupleTableSlot(slot);
-	table_endscan(scan);
+		ExecDropSingleTupleTableSlot(slot);
+		table_endscan(scan);
 
 #if PG_VERSION_NUM >= 180000
-	/* Unregister the snapshot (PG18+ only) */
-	if (snapshot)
-		UnregisterSnapshot(snapshot);
+		if (snapshot)
+			UnregisterSnapshot(snapshot);
 #endif
 
-	/* Report writing phase */
-	pgstat_progress_update_param(
-			PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_WRITING);
+		/* Report writing phase */
+		pgstat_progress_update_param(
+				PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_WRITING);
 
-	/* Finalize posting lists and update statistics */
-	tp_build_finalize_and_update_stats(
-			index, index_state, &total_docs, &total_len);
+		/* Write final segment if data remains */
+		if (build_ctx->num_docs > 0)
+			tp_build_flush_and_link(build_ctx, index);
 
-	/* Create index build result */
-	result				= (IndexBuildResult *)palloc(sizeof(IndexBuildResult));
-	result->heap_tuples = total_docs;
-	result->index_tuples = total_docs;
-
-	if (build_progress.active)
-	{
-		/* Accumulate stats for aggregated summary */
-		build_progress.total_docs += total_docs;
-		build_progress.total_len += total_len;
-		build_progress.partition_count++;
-	}
-	else
-	{
-		elog(NOTICE,
-			 "BM25 index build completed: " UINT64_FORMAT
-			 " documents, avg_length=%.2f",
-			 total_docs,
-			 total_len > 0 ? (float4)(total_len / (double)total_docs) : 0.0);
-	}
-
-	/*
-	 * Final spill: Write any remaining memtable data to disk segment.
-	 * This must happen BEFORE destroying the private DSA, otherwise all
-	 * build data would be lost.
-	 */
-	{
-		TpMemtable *memtable = get_memtable(index_state);
-
-		if (memtable && memtable->total_postings > 0)
+		/* Update metapage with corpus statistics */
 		{
-			BlockNumber		segment_root;
 			Buffer			metabuf;
 			Page			metapage;
 			TpIndexMetaPage metap;
 
-			segment_root = tp_write_segment(index_state, index);
+			metabuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
+			LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
+			metapage = BufferGetPage(metabuf);
+			metap	 = (TpIndexMetaPage)PageGetContents(metapage);
 
-			if (segment_root != InvalidBlockNumber)
-			{
-				/* Link new segment as L0 chain head */
-				metabuf = ReadBuffer(index, 0);
-				LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
-				metapage = BufferGetPage(metabuf);
-				metap	 = (TpIndexMetaPage)PageGetContents(metapage);
+			metap->total_docs = total_docs;
+			metap->total_len  = total_len;
 
-				if (metap->level_heads[0] != InvalidBlockNumber)
-				{
-					/* Point new segment to old chain head */
-					Buffer			 seg_buf;
-					Page			 seg_page;
-					TpSegmentHeader *seg_header;
-
-					seg_buf = ReadBuffer(index, segment_root);
-					LockBuffer(seg_buf, BUFFER_LOCK_EXCLUSIVE);
-					seg_page   = BufferGetPage(seg_buf);
-					seg_header = (TpSegmentHeader *)PageGetContents(seg_page);
-					seg_header->next_segment = metap->level_heads[0];
-					MarkBufferDirty(seg_buf);
-					UnlockReleaseBuffer(seg_buf);
-				}
-
-				metap->level_heads[0] = segment_root;
-				metap->level_counts[0]++;
-				MarkBufferDirty(metabuf);
-				UnlockReleaseBuffer(metabuf);
-			}
+			MarkBufferDirty(metabuf);
+			FlushOneBuffer(metabuf);
+			UnlockReleaseBuffer(metabuf);
 		}
+
+		/* Update shared state for runtime queries */
+		index_state->shared->total_docs = total_docs;
+		index_state->shared->total_len	= total_len;
+
+		/* Create index build result */
+		result = (IndexBuildResult *)palloc(sizeof(IndexBuildResult));
+		result->heap_tuples	 = total_docs;
+		result->index_tuples = total_docs;
+
+		if (build_progress.active)
+		{
+			/* Accumulate stats for aggregated summary */
+			build_progress.total_docs += total_docs;
+			build_progress.total_len += total_len;
+			build_progress.partition_count++;
+		}
+		else
+		{
+			elog(NOTICE,
+				 "BM25 index build completed: " UINT64_FORMAT
+				 " documents, avg_length=%.2f",
+				 total_docs,
+				 total_docs > 0 ? (float4)(total_len / (double)total_docs)
+								: 0.0);
+		}
+
+		/*
+		 * Release the per-index lock before finalizing.
+		 * Critical for partitioned tables to avoid hitting
+		 * MAX_SIMUL_LWLOCKS limit.
+		 */
+		tp_release_index_lock(index_state);
+
+		/*
+		 * Finalize build mode: destroy private DSA and
+		 * transition to global DSA for runtime operation.
+		 */
+		tp_finalize_build_mode(index_state);
+
+		/* Cleanup */
+		tp_build_context_destroy(build_ctx);
+		MemoryContextDelete(build_tmpctx);
 	}
-
-	/*
-	 * Release the per-index lock before finalizing.
-	 * This is critical for partitioned tables where all partition indexes
-	 * are built in a single transaction - without this, locks would accumulate
-	 * and eventually hit the MAX_SIMUL_LWLOCKS limit (~200 locks).
-	 */
-	tp_release_index_lock(index_state);
-
-	/*
-	 * Finalize build mode: destroy private DSA and transition to global DSA.
-	 * This must be done before returning, otherwise queries will try to use
-	 * the private DSA which becomes invalid after the build transaction ends.
-	 */
-	tp_finalize_build_mode(index_state);
 
 	return result;
 }

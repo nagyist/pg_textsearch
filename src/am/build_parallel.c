@@ -2,16 +2,21 @@
  * Copyright (c) 2025-2026 Tiger Data, Inc.
  * Licensed under the PostgreSQL License. See LICENSE for details.
  *
- * build_parallel.c - Parallel index build implementation
+ * build_parallel.c - Two-phase parallel index build with
+ * cross-worker compaction
  *
  * Architecture:
- * - Workers scan the heap and build memtables in shared DSA memory
- * - Each worker has two memtables (double-buffering) for flow control
- * - Leader doesn't scan - it processes worker memtables and writes segments
- * - All index writes done by leader, ensuring sequential page allocation
- *
- * This design maximizes parallelism by overlapping heap scanning (workers)
- * with segment writing (leader).
+ * - Phase 1: Each worker scans a heap partition, builds a local
+ *   TpBuildContext, flushes segments to BufFile, and compacts
+ *   within BufFile. Workers report segment info.
+ * - Barrier: Leader plans cross-worker merge groups, sums pages,
+ *   pre-extends relation with ExtendBufferedRelBy, sets atomic
+ *   next_page counter, signals Phase 2.
+ * - Phase 2: Workers COPY their non-merged segments to pages,
+ *   then work-steal merge groups. Each task bulk-claims a
+ *   contiguous page range from the shared counter.
+ * - Leader truncates unused pool pages, links segments into
+ *   per-level chains, updates metapage.
  */
 #include <postgres.h>
 
@@ -20,44 +25,352 @@
 #include <access/tableam.h>
 #include <access/xact.h>
 #include <catalog/index.h>
+#include <catalog/storage.h>
 #include <commands/progress.h>
-#include <lib/dshash.h>
 #include <miscadmin.h>
+#include <storage/buffile.h>
 #include <storage/bufmgr.h>
 #include <storage/condition_variable.h>
 #include <storage/smgr.h>
 #include <tsearch/ts_type.h>
 #include <utils/backend_progress.h>
 #include <utils/builtins.h>
-#include <utils/dsa.h>
-#include <utils/guc.h>
 #include <utils/lsyscache.h>
 #include <utils/memutils.h>
 #include <utils/rel.h>
 #include <utils/wait_event.h>
 
 #include "am.h"
+#include "build_context.h"
 #include "build_parallel.h"
-#include "common/hashfn.h"
 #include "constants.h"
-#include "memtable/memtable.h"
-#include "memtable/posting.h"
-#include "memtable/stringtable.h"
 #include "segment/compression.h"
-#include "segment/dictionary.h"
 #include "segment/docmap.h"
+#include "segment/fieldnorm.h"
 #include "segment/merge.h"
+#include "segment/merge_internal.h"
 #include "segment/pagemapper.h"
 #include "segment/segment.h"
+#include "segment/segment_io.h"
 #include "state/metapage.h"
 
-/* GUC: compression for segments */
+/* Defined in build.c, extracts terms from TSVector */
+extern int tp_extract_terms_from_tsvector(
+		TSVector tsvector,
+		char  ***terms_out,
+		int32  **frequencies_out,
+		int		*term_count_out);
+
+/* GUC variable for segment compression */
 extern bool tp_compress_segments;
 
-/*
- * Forward declarations
+/* Chunk size for streaming temp segments to index pages */
+#define TP_COPY_BUF_SIZE (64 * 1024)
+
+/* ----------------------------------------------------------------
+ * Worker-local segment tracking
+ * ----------------------------------------------------------------
  */
-static void tp_init_parallel_shared(
+
+typedef struct WorkerSegmentEntry
+{
+	uint64 offset;	  /* BufFile offset */
+	uint64 data_size; /* Segment bytes */
+	uint32 level;	  /* 0=L0, 1=L1, etc. */
+	bool   consumed;  /* merged into higher level */
+} WorkerSegmentEntry;
+
+typedef struct WorkerSegmentTracker
+{
+	WorkerSegmentEntry *entries;
+	uint32				count;
+	uint32				capacity;
+	uint32				level_counts[TP_MAX_LEVELS];
+	uint64				buffile_end; /* logical end of BufFile */
+} WorkerSegmentTracker;
+
+static void
+tracker_init(WorkerSegmentTracker *tracker)
+{
+	tracker->capacity	 = 32;
+	tracker->count		 = 0;
+	tracker->buffile_end = 0;
+	tracker->entries = palloc(tracker->capacity * sizeof(WorkerSegmentEntry));
+	memset(tracker->level_counts, 0, sizeof(tracker->level_counts));
+}
+
+static void
+tracker_add_segment(
+		WorkerSegmentTracker *tracker,
+		uint64				  offset,
+		uint64				  data_size,
+		uint32				  level)
+{
+	if (tracker->count >= tracker->capacity)
+	{
+		tracker->capacity *= 2;
+		tracker->entries = repalloc(
+				tracker->entries,
+				tracker->capacity * sizeof(WorkerSegmentEntry));
+	}
+	tracker->entries[tracker->count].offset	   = offset;
+	tracker->entries[tracker->count].data_size = data_size;
+	tracker->entries[tracker->count].level	   = level;
+	tracker->entries[tracker->count].consumed  = false;
+	tracker->count++;
+	tracker->level_counts[level]++;
+}
+
+static void
+tracker_destroy(WorkerSegmentTracker *tracker)
+{
+	if (tracker->entries)
+		pfree(tracker->entries);
+}
+
+/* ----------------------------------------------------------------
+ * Worker-side BufFile compaction
+ *
+ * Mirrors tp_maybe_compact_level() but operates entirely within
+ * BufFile. Opens BufFile readers for source segments, performs
+ * N-way merge, writes result back to BufFile using TpMergeSink.
+ * ----------------------------------------------------------------
+ */
+static void
+worker_maybe_compact_level(
+		WorkerSegmentTracker *tracker, BufFile *file, uint32 level)
+{
+	uint32 spl = (uint32)tp_segments_per_level;
+
+	if (level >= TP_MAX_LEVELS - 1)
+		return;
+
+	while (tracker->level_counts[level] >= spl)
+	{
+		TpMergeSource	 *sources;
+		TpSegmentReader **readers;
+		int				  num_sources;
+		TpMergedTerm	 *merged_terms	   = NULL;
+		uint32			  num_merged_terms = 0;
+		uint32			  merged_capacity  = 0;
+		uint64			  total_tokens	   = 0;
+		uint32			  collected		   = 0;
+		uint32			  i;
+		MemoryContext	  merge_ctx;
+		MemoryContext	  old_ctx;
+
+		/* Collect spl non-consumed entries at this level */
+		sources		= palloc0(sizeof(TpMergeSource) * spl);
+		readers		= palloc0(sizeof(TpSegmentReader *) * spl);
+		num_sources = 0;
+
+		for (i = 0; i < tracker->count && collected < spl; i++)
+		{
+			WorkerSegmentEntry *e = &tracker->entries[i];
+
+			if (e->consumed || e->level != level)
+				continue;
+
+			readers[collected] = tp_segment_open_from_buffile(file, e->offset);
+			if (!readers[collected])
+				continue;
+
+			if (merge_source_init_from_reader(
+						&sources[num_sources], readers[collected]))
+			{
+				total_tokens += readers[collected]->header->total_tokens;
+				num_sources++;
+			}
+			collected++;
+		}
+
+		if (num_sources < 2)
+		{
+			/* Not enough valid sources to merge */
+			for (i = 0; i < (uint32)num_sources; i++)
+				merge_source_close(&sources[i]);
+			for (i = 0; i < collected; i++)
+			{
+				if (readers[i])
+					tp_segment_close(readers[i]);
+			}
+			pfree(sources);
+			pfree(readers);
+			break;
+		}
+
+		merge_ctx = AllocSetContextCreate(
+				CurrentMemoryContext,
+				"Worker BufFile Merge",
+				ALLOCSET_DEFAULT_SIZES);
+		old_ctx = MemoryContextSwitchTo(merge_ctx);
+
+		/* N-way term merge */
+		while (true)
+		{
+			int			  min_idx;
+			const char	 *min_term;
+			TpMergedTerm *current_merged;
+
+			min_idx = merge_find_min_source(sources, num_sources);
+			if (min_idx < 0)
+				break;
+
+			min_term = sources[min_idx].current_term;
+
+			if (num_merged_terms >= merged_capacity)
+			{
+				merged_capacity = merged_capacity == 0 ? 1024
+													   : merged_capacity * 2;
+				if (merged_terms == NULL)
+					merged_terms = palloc_extended(
+							merged_capacity * sizeof(TpMergedTerm),
+							MCXT_ALLOC_HUGE);
+				else
+					merged_terms = repalloc_huge(
+							merged_terms,
+							merged_capacity * sizeof(TpMergedTerm));
+			}
+
+			current_merged					 = &merged_terms[num_merged_terms];
+			current_merged->term_len		 = strlen(min_term);
+			current_merged->term			 = pstrdup(min_term);
+			current_merged->segment_refs	 = NULL;
+			current_merged->num_segment_refs = 0;
+			current_merged->segment_refs_capacity = 0;
+			current_merged->posting_offset		  = 0;
+			current_merged->posting_count		  = 0;
+			num_merged_terms++;
+
+			for (i = 0; i < (uint32)num_sources; i++)
+			{
+				if (sources[i].exhausted)
+					continue;
+
+				if (strcmp(sources[i].current_term, current_merged->term) == 0)
+				{
+					merged_term_add_segment_ref(
+							current_merged, i, &sources[i].current_entry);
+					merge_source_advance(&sources[i]);
+				}
+			}
+
+			CHECK_FOR_INTERRUPTS();
+		}
+
+		MemoryContextSwitchTo(old_ctx);
+
+		/* Write merged segment to BufFile via sink */
+		if (num_merged_terms > 0)
+		{
+			TpMergeSink sink;
+			int			end_fileno;
+			off_t		end_offset;
+			uint64		new_offset;
+			uint64		new_data_size;
+
+			/*
+			 * Position at logical end of BufFile for appending.
+			 * Do NOT use SEEK_END: BufFileSeek(SEEK_END) calls
+			 * FileSize() before flushing the dirty buffer, so it
+			 * returns the on-disk size which may be less than the
+			 * logical size. Use our tracked buffile_end instead.
+			 */
+			new_offset = tracker->buffile_end;
+			tp_buffile_decompose_offset(new_offset, &end_fileno, &end_offset);
+			BufFileSeek(file, end_fileno, end_offset, SEEK_SET);
+
+			merge_sink_init_buffile(&sink, file);
+			write_merged_segment_to_sink(
+					&sink,
+					merged_terms,
+					num_merged_terms,
+					sources,
+					num_sources,
+					level + 1,
+					total_tokens,
+					false);
+			new_data_size = sink.current_offset;
+
+			/* Update logical end of BufFile */
+			tracker->buffile_end = new_offset + new_data_size;
+
+			/* Mark source segments consumed */
+			collected = 0;
+			for (i = 0; i < tracker->count && collected < spl; i++)
+			{
+				WorkerSegmentEntry *e = &tracker->entries[i];
+
+				if (e->consumed || e->level != level)
+					continue;
+
+				e->consumed = true;
+				collected++;
+			}
+			tracker->level_counts[level] -= spl;
+
+			/* Add merged segment */
+			tracker_add_segment(tracker, new_offset, new_data_size, level + 1);
+		}
+
+		/* Cleanup merge data */
+		for (i = 0; i < num_merged_terms; i++)
+		{
+			if (merged_terms[i].term)
+				pfree(merged_terms[i].term);
+			if (merged_terms[i].segment_refs)
+				pfree(merged_terms[i].segment_refs);
+		}
+		if (merged_terms)
+			pfree(merged_terms);
+
+		/* Close sources (don't close readers - merge_source_close
+		 * doesn't own them for init_from_reader) */
+		for (i = 0; i < (uint32)num_sources; i++)
+		{
+			if (sources[i].current_term)
+				pfree(sources[i].current_term);
+			if (sources[i].string_offsets)
+				pfree(sources[i].string_offsets);
+			sources[i].reader = NULL;
+		}
+		for (i = 0; i < collected; i++)
+		{
+			if (readers[i])
+				tp_segment_close(readers[i]);
+		}
+
+		pfree(sources);
+		pfree(readers);
+		MemoryContextDelete(merge_ctx);
+	}
+
+	/* Recurse to check next level */
+	worker_maybe_compact_level(tracker, file, level + 1);
+}
+
+/* ----------------------------------------------------------------
+ * Shared memory estimation and initialization
+ * ----------------------------------------------------------------
+ */
+
+Size
+tp_parallel_build_estimate_shmem(
+		Relation heap, Snapshot snapshot, int nworkers)
+{
+	Size size;
+
+	/* Base shared structure (includes per-worker block ranges) */
+	size = MAXALIGN(sizeof(TpParallelBuildShared));
+
+	/* Per-worker result array */
+	size = add_size(size, MAXALIGN(sizeof(TpParallelWorkerResult) * nworkers));
+
+	return size;
+}
+
+static void
+tp_init_parallel_shared(
 		TpParallelBuildShared *shared,
 		Relation			   heap,
 		Relation			   index,
@@ -65,57 +378,1002 @@ static void tp_init_parallel_shared(
 		AttrNumber			   attnum,
 		double				   k1,
 		double				   b,
-		int					   nworkers,
-		dsa_area			  *dsa);
-
-static void tp_leader_process_buffers(
-		TpParallelBuildShared *shared, Relation index, dsa_area *dsa);
-
-static BlockNumber tp_merge_worker_buffers_to_segment(
-		TpWorkerMemtableBuffer **buffers,
-		int						 num_buffers,
-		Relation				 index,
-		dsa_area				*dsa);
-
-static void tp_worker_process_document(
-		dsa_area			   *dsa,
-		TpWorkerMemtableBuffer *buffer,
-		TupleTableSlot		   *slot,
-		int						attnum,
-		Oid						text_config_oid);
-
-static dshash_table *tp_worker_create_string_table(dsa_area *dsa);
-static dshash_table *tp_worker_create_doclength_table(dsa_area *dsa);
-static uint32
-		   tp_worker_string_hash(const void *key, size_t keysize, void *arg);
-static int tp_worker_string_compare(
-		const void *a, const void *b, size_t keysize, void *arg);
-static TermInfo *build_dictionary_from_worker_buffer(
-		dsa_area *dsa, TpWorkerMemtableBuffer *buffer, uint32 *num_terms);
-
-/*
- * Estimate shared memory needed for parallel build
- */
-Size
-tp_parallel_build_estimate_shmem(
-		Relation heap, Snapshot snapshot, int nworkers)
+		int					   nworkers)
 {
-	Size size;
+	TpParallelWorkerResult *results;
+	int						i;
 
-	/* Base shared structure */
-	size = MAXALIGN(sizeof(TpParallelBuildShared));
+	memset(shared, 0, sizeof(TpParallelBuildShared));
 
-	/* Per-worker state array */
-	size = add_size(size, MAXALIGN(sizeof(TpWorkerState) * nworkers));
+	/* Immutable configuration */
+	shared->heaprelid		= RelationGetRelid(heap);
+	shared->indexrelid		= RelationGetRelid(index);
+	shared->text_config_oid = text_config_oid;
+	shared->attnum			= attnum;
+	shared->k1				= k1;
+	shared->b				= b;
+	shared->nworkers		= nworkers;
 
-	/* Parallel table scan descriptor */
-	size = add_size(size, table_parallelscan_estimate(heap, snapshot));
+	/* Coordination */
+	ConditionVariableInit(&shared->all_done_cv);
+	pg_atomic_init_u32(&shared->workers_done, 0);
+	pg_atomic_init_u64(&shared->tuples_done, 0);
 
-	return size;
+	/* TID range scan coordination */
+	shared->nworkers_launched = 0;
+	pg_atomic_init_u32(&shared->scan_ready, 0);
+
+	/* Two-phase coordination */
+	pg_atomic_init_u32(&shared->phase1_done, 0);
+	ConditionVariableInit(&shared->phase2_cv);
+	pg_atomic_init_u32(&shared->phase2_ready, 0);
+	pg_atomic_init_u64(&shared->next_page, 0);
+
+	/* Cross-worker merge groups */
+	shared->num_merge_groups = 0;
+	pg_atomic_init_u32(&shared->next_merge_group, 0);
+	{
+		int mg;
+
+		for (mg = 0; mg < TP_MAX_MERGE_GROUPS; mg++)
+			shared->merge_group_results[mg] = InvalidBlockNumber;
+	}
+
+	/* Initialize per-worker results */
+	results = TpParallelWorkerResults(shared);
+	for (i = 0; i < nworkers; i++)
+		memset(&results[i], 0, sizeof(TpParallelWorkerResult));
+}
+
+/* ----------------------------------------------------------------
+ * Write a temp file segment to index pages using atomic counter
+ *
+ * Uses pre-allocated pages via atomic page counter instead of
+ * FSM/P_NEW, ensuring contiguous allocation from the pool.
+ * ----------------------------------------------------------------
+ */
+static BlockNumber
+write_temp_segment_to_index_parallel(
+		Relation		  index,
+		BufFile			 *file,
+		uint64			  base_offset,
+		uint64			  data_size,
+		pg_atomic_uint64 *page_counter)
+{
+	TpSegmentWriter writer;
+	BlockNumber		header_block;
+	BlockNumber		page_index_root;
+	char			buf[TP_COPY_BUF_SIZE];
+	uint64			remaining;
+	int				seek_fileno;
+	off_t			seek_offset;
+
+	/* Initialize writer with atomic page counter */
+	tp_segment_writer_init_parallel(&writer, index, page_counter);
+	header_block = writer.pages[0];
+
+	/* Stream data from BufFile through writer */
+	tp_buffile_decompose_offset(base_offset, &seek_fileno, &seek_offset);
+	BufFileSeek(file, seek_fileno, seek_offset, SEEK_SET);
+	remaining = data_size;
+	while (remaining > 0)
+	{
+		uint32 chunk = (uint32)Min(remaining, TP_COPY_BUF_SIZE);
+
+		BufFileReadExact(file, buf, chunk);
+		tp_segment_writer_write(&writer, buf, chunk);
+		remaining -= chunk;
+	}
+
+	/* Flush remaining buffered data */
+	tp_segment_writer_flush(&writer);
+	writer.buffer_pos = SizeOfPageHeaderData;
+
+	/* Write page index using atomic counter */
+	page_index_root = write_page_index_with_counter(
+			index, writer.pages, writer.pages_allocated, page_counter);
+
+	/* Update segment header on the first page */
+	{
+		Buffer			 header_buf;
+		Page			 header_page;
+		TpSegmentHeader *hdr;
+
+		header_buf = ReadBuffer(index, header_block);
+		LockBuffer(header_buf, BUFFER_LOCK_EXCLUSIVE);
+		header_page = BufferGetPage(header_buf);
+		hdr			= (TpSegmentHeader *)PageGetContents(header_page);
+
+		hdr->num_pages	= writer.pages_allocated;
+		hdr->page_index = page_index_root;
+		hdr->data_size	= writer.current_offset;
+
+		MarkBufferDirty(header_buf);
+		UnlockReleaseBuffer(header_buf);
+	}
+
+	tp_segment_writer_finish(&writer);
+
+	/* Free writer pages array */
+	if (writer.pages)
+		pfree(writer.pages);
+
+	return header_block;
 }
 
 /*
- * Main entry point for parallel index build
+ * Compute index pages needed for one segment of given data_size.
+ * Counts root/header page + data pages + page index pages.
+ */
+static uint64
+compute_segment_pages(uint64 data_size)
+{
+	uint32 epp		  = tp_page_index_entries_per_page();
+	uint32 data_pages = (uint32)((data_size + SEGMENT_DATA_PER_PAGE - 1) /
+								 SEGMENT_DATA_PER_PAGE);
+	/* Page index indexes root + data pages */
+	uint32 pi_pages = (1 + data_pages + epp - 1) / epp;
+
+	return 1 + (uint64)data_pages + pi_pages;
+}
+
+/*
+ * Plan cross-worker merge groups after Phase 1.
+ *
+ * Collects all worker segments grouped by level, then forms merge
+ * groups of segments_per_level segments at each level (bottom-up).
+ * Remaining segments stay tagged 0 (COPY). Merge group outputs
+ * go to level+1, which may cascade into further groups.
+ *
+ * Each segment's seg_merge_group[s] is set to:
+ *   0    = COPY to pages at original level
+ *   N>0  = member of merge group N (1-indexed)
+ */
+static void
+plan_merge_groups(
+		TpParallelBuildShared  *shared,
+		TpParallelWorkerResult *results,
+		int						nworkers)
+{
+	uint32 spl		 = (uint32)tp_segments_per_level;
+	uint32 max_total = (uint32)nworkers * TP_MAX_WORKER_SEGMENTS;
+	uint32 level_counts[TP_MAX_LEVELS];
+	uint32 num_groups = 0;
+	int	   level;
+
+	/* (worker_id, seg_idx) pairs per level */
+	typedef struct
+	{
+		uint16 worker_id;
+		uint16 seg_idx;
+	} SegRef;
+
+	SegRef *level_segs[TP_MAX_LEVELS];
+
+	memset(level_counts, 0, sizeof(level_counts));
+
+	/* Allocate per-level arrays */
+	for (level = 0; level < TP_MAX_LEVELS; level++)
+		level_segs[level] = palloc(max_total * sizeof(SegRef));
+
+	/* Initialize all merge_group tags to 0 (COPY) */
+	{
+		int w;
+
+		for (w = 0; w < nworkers; w++)
+		{
+			memset(results[w].seg_merge_group,
+				   0,
+				   sizeof(results[w].seg_merge_group));
+		}
+	}
+
+	/* Collect all segments grouped by level */
+	{
+		int w;
+
+		for (w = 0; w < nworkers; w++)
+		{
+			uint32 s;
+
+			for (s = 0; s < results[w].final_segment_count; s++)
+			{
+				uint32 lv  = results[w].seg_levels[s];
+				uint32 idx = level_counts[lv];
+
+				level_segs[lv][idx].worker_id = (uint16)w;
+				level_segs[lv][idx].seg_idx	  = (uint16)s;
+				level_counts[lv]++;
+			}
+		}
+	}
+
+	/* Bottom-up: form merge groups at each level */
+	for (level = 0; level < TP_MAX_LEVELS - 1; level++)
+	{
+		uint32 count = level_counts[level];
+		uint32 pos	 = 0;
+
+		while (count - pos >= spl)
+		{
+			uint32 g;
+			uint32 k;
+
+			if (num_groups >= TP_MAX_MERGE_GROUPS)
+			{
+				elog(WARNING,
+					 "parallel build: too many merge groups "
+					 "(%u), stopping at level %d",
+					 num_groups,
+					 level);
+				goto done;
+			}
+
+			g							  = num_groups++;
+			shared->merge_group_levels[g] = level + 1;
+
+			/* Tag spl segments as members of this group */
+			for (k = 0; k < spl; k++)
+			{
+				SegRef *ref = &level_segs[level][pos + k];
+				int		w	= ref->worker_id;
+				int		s	= ref->seg_idx;
+
+				results[w].seg_merge_group[s] = g + 1;
+			}
+
+			/*
+			 * The merge output goes to level+1. Add a
+			 * placeholder entry so cascading can pick it up.
+			 * We use worker_id=0xFFFF as sentinel (no real
+			 * segment — the merge result is stored in
+			 * merge_group_results[g]).
+			 */
+			{
+				uint32 next_lv = level + 1;
+				uint32 idx	   = level_counts[next_lv];
+
+				level_segs[next_lv][idx].worker_id = 0xFFFF;
+				level_segs[next_lv][idx].seg_idx   = (uint16)g;
+				level_counts[next_lv]++;
+			}
+
+			pos += spl;
+		}
+
+		/*
+		 * Merge leftover segments at this level (fewer than spl).
+		 * This reduces L0 fragmentation so fewer segments remain
+		 * after build. Unlike full groups, remainder groups do NOT
+		 * cascade to higher levels because worker_execute_merge_group
+		 * only searches worker result arrays for sources, not the
+		 * outputs of earlier merge groups.
+		 */
+		if (count - pos >= 2)
+		{
+			uint32 remainder = count - pos;
+			uint32 g;
+			uint32 k;
+
+			if (num_groups >= TP_MAX_MERGE_GROUPS)
+				goto done;
+
+			g							  = num_groups++;
+			shared->merge_group_levels[g] = level + 1;
+
+			for (k = 0; k < remainder; k++)
+			{
+				SegRef *ref = &level_segs[level][pos + k];
+				int		w	= ref->worker_id;
+				int		s	= ref->seg_idx;
+
+				results[w].seg_merge_group[s] = g + 1;
+			}
+
+			pos += remainder;
+		}
+	}
+
+done:
+	shared->num_merge_groups = num_groups;
+	pg_atomic_write_u32(&shared->next_merge_group, 0);
+
+	/* Free per-level arrays */
+	for (level = 0; level < TP_MAX_LEVELS; level++)
+		pfree(level_segs[level]);
+}
+
+/*
+ * Compute total pages needed for Phase 2.
+ * Sums exact pages for COPY segments and upper-bound pages
+ * for merge groups (sum of source sizes).
+ */
+static uint64
+compute_total_pages_needed(
+		TpParallelBuildShared  *shared,
+		TpParallelWorkerResult *results,
+		int						nworkers)
+{
+	uint64 total = 0;
+	int	   w;
+	uint32 g;
+
+	/* COPY segments: exact page counts */
+	for (w = 0; w < nworkers; w++)
+	{
+		uint32 s;
+
+		for (s = 0; s < results[w].final_segment_count; s++)
+		{
+			if (results[w].seg_merge_group[s] == 0)
+				total += compute_segment_pages(results[w].seg_sizes[s]);
+		}
+	}
+
+	/* Merge groups: upper-bound (sum of source sizes) + margin */
+	for (g = 0; g < shared->num_merge_groups; g++)
+	{
+		uint64 sum_sizes = 0;
+		uint64 group_pages;
+
+		for (w = 0; w < nworkers; w++)
+		{
+			uint32 s;
+
+			for (s = 0; s < results[w].final_segment_count; s++)
+			{
+				if (results[w].seg_merge_group[s] == g + 1)
+					sum_sizes += results[w].seg_sizes[s];
+			}
+		}
+		group_pages = compute_segment_pages(sum_sizes);
+
+		/*
+		 * Add 5% safety margin for merge groups.
+		 * Cross-worker merge remaps doc IDs into a wider range,
+		 * increasing bitpacked delta widths at worker boundaries.
+		 * This makes the merged output up to ~1-2% larger than
+		 * the sum of source sizes. Unused pages are truncated.
+		 */
+		group_pages += group_pages / 20;
+		total += group_pages;
+	}
+
+	return total;
+}
+
+/*
+ * Execute one cross-worker merge group.
+ *
+ * Called by workers in Phase 2 via work-stealing. Opens source
+ * segments from multiple workers' BufFiles, performs N-way merge,
+ * writes output directly to pre-allocated index pages.
+ */
+static void
+worker_execute_merge_group(
+		TpParallelBuildShared *shared, Relation index, uint32 group_idx)
+{
+	TpParallelWorkerResult *results	 = TpParallelWorkerResults(shared);
+	int						nworkers = shared->nworkers_launched;
+
+	/* Collect source segments for this group */
+	typedef struct
+	{
+		int	   worker_id;
+		uint32 seg_idx;
+	} MergeRef;
+
+	MergeRef *refs;
+	uint32	  num_refs	   = 0;
+	uint64	  sum_sizes	   = 0;
+	uint64	  total_tokens = 0;
+	uint32	  target_level;
+	int		  w;
+	uint32	  i;
+
+	TpSegmentReader **readers;
+	TpMergeSource	 *sources;
+	int				  num_sources;
+	BufFile			**open_files;
+	bool			 *file_opened;
+
+	TpMergedTerm *merged_terms	   = NULL;
+	uint32		  num_merged_terms = 0;
+	uint32		  merged_capacity  = 0;
+	MemoryContext merge_ctx;
+	MemoryContext old_ctx;
+
+	uint64			 pages_needed;
+	uint64			 pool_start;
+	pg_atomic_uint64 local_counter;
+	target_level = shared->merge_group_levels[group_idx];
+
+	/* Count refs and sum sizes */
+	refs = palloc(
+			sizeof(MergeRef) * (uint32)nworkers * TP_MAX_WORKER_SEGMENTS);
+	for (w = 0; w < nworkers; w++)
+	{
+		uint32 s;
+
+		for (s = 0; s < results[w].final_segment_count; s++)
+		{
+			if (results[w].seg_merge_group[s] == group_idx + 1)
+			{
+				refs[num_refs].worker_id = w;
+				refs[num_refs].seg_idx	 = s;
+				num_refs++;
+				sum_sizes += results[w].seg_sizes[s];
+			}
+		}
+	}
+
+	if (num_refs == 0)
+	{
+		pfree(refs);
+		shared->merge_group_results[group_idx] = InvalidBlockNumber;
+		return;
+	}
+
+	/* Bulk-claim contiguous page range (with 5% margin) */
+	pages_needed = compute_segment_pages(sum_sizes);
+	pages_needed += pages_needed / 20;
+	pool_start = pg_atomic_fetch_add_u64(&shared->next_page, pages_needed);
+	pg_atomic_init_u64(&local_counter, pool_start);
+
+	/* Open needed worker BufFiles (one per worker, cached) */
+	open_files	= palloc0(sizeof(BufFile *) * nworkers);
+	file_opened = palloc0(sizeof(bool) * nworkers);
+
+	readers		= palloc0(sizeof(TpSegmentReader *) * num_refs);
+	sources		= palloc0(sizeof(TpMergeSource) * num_refs);
+	num_sources = 0;
+
+	for (i = 0; i < num_refs; i++)
+	{
+		int	   wid = refs[i].worker_id;
+		uint32 s   = refs[i].seg_idx;
+
+		if (!file_opened[wid])
+		{
+			char fname[64];
+
+			snprintf(fname, sizeof(fname), "tp_worker_%d", wid);
+			open_files[wid] = BufFileOpenFileSet(
+					&shared->fileset.fs, fname, O_RDONLY, false);
+			file_opened[wid] = true;
+		}
+
+		readers[i] = tp_segment_open_from_buffile(
+				open_files[wid], results[wid].seg_offsets[s]);
+		if (!readers[i])
+			continue;
+
+		if (merge_source_init_from_reader(&sources[num_sources], readers[i]))
+		{
+			total_tokens += readers[i]->header->total_tokens;
+			num_sources++;
+		}
+	}
+
+	if (num_sources == 0)
+	{
+		/* No valid sources — clean up and mark invalid */
+		for (i = 0; i < num_refs; i++)
+		{
+			if (readers[i])
+				tp_segment_close(readers[i]);
+		}
+		for (w = 0; w < nworkers; w++)
+		{
+			if (file_opened[w])
+				BufFileClose(open_files[w]);
+		}
+		pfree(refs);
+		pfree(readers);
+		pfree(sources);
+		pfree(open_files);
+		pfree(file_opened);
+		shared->merge_group_results[group_idx] = InvalidBlockNumber;
+		return;
+	}
+
+	/* N-way term merge */
+	merge_ctx = AllocSetContextCreate(
+			CurrentMemoryContext,
+			"Cross-worker Merge",
+			ALLOCSET_DEFAULT_SIZES);
+	old_ctx = MemoryContextSwitchTo(merge_ctx);
+
+	while (true)
+	{
+		int			  min_idx;
+		const char	 *min_term;
+		TpMergedTerm *current_merged;
+
+		min_idx = merge_find_min_source(sources, num_sources);
+		if (min_idx < 0)
+			break;
+
+		min_term = sources[min_idx].current_term;
+
+		if (num_merged_terms >= merged_capacity)
+		{
+			merged_capacity = merged_capacity == 0 ? 1024
+												   : merged_capacity * 2;
+			if (merged_terms == NULL)
+				merged_terms = palloc_extended(
+						merged_capacity * sizeof(TpMergedTerm),
+						MCXT_ALLOC_HUGE);
+			else
+				merged_terms = repalloc_huge(
+						merged_terms, merged_capacity * sizeof(TpMergedTerm));
+		}
+
+		current_merged					 = &merged_terms[num_merged_terms];
+		current_merged->term_len		 = strlen(min_term);
+		current_merged->term			 = pstrdup(min_term);
+		current_merged->segment_refs	 = NULL;
+		current_merged->num_segment_refs = 0;
+		current_merged->segment_refs_capacity = 0;
+		current_merged->posting_offset		  = 0;
+		current_merged->posting_count		  = 0;
+		num_merged_terms++;
+
+		for (i = 0; i < (uint32)num_sources; i++)
+		{
+			if (sources[i].exhausted)
+				continue;
+
+			if (strcmp(sources[i].current_term, current_merged->term) == 0)
+			{
+				merged_term_add_segment_ref(
+						current_merged, i, &sources[i].current_entry);
+				merge_source_advance(&sources[i]);
+			}
+		}
+
+		CHECK_FOR_INTERRUPTS();
+	}
+
+	MemoryContextSwitchTo(old_ctx);
+
+	/* Write merged segment to pages */
+	if (num_merged_terms > 0)
+	{
+		TpMergeSink sink;
+
+		merge_sink_init_pages_parallel(&sink, index, &local_counter);
+
+		write_merged_segment_to_sink(
+				&sink,
+				merged_terms,
+				num_merged_terms,
+				sources,
+				num_sources,
+				target_level,
+				total_tokens,
+				true);
+
+		shared->merge_group_results[group_idx] = sink.writer.pages[0];
+
+		if (sink.writer.pages)
+			pfree(sink.writer.pages);
+	}
+	else
+	{
+		shared->merge_group_results[group_idx] = InvalidBlockNumber;
+	}
+
+	/* Cleanup */
+	for (i = 0; i < num_merged_terms; i++)
+	{
+		if (merged_terms[i].term)
+			pfree(merged_terms[i].term);
+		if (merged_terms[i].segment_refs)
+			pfree(merged_terms[i].segment_refs);
+	}
+	if (merged_terms)
+		pfree(merged_terms);
+
+	/* Close sources (don't close readers, init_from_reader) */
+	for (i = 0; i < (uint32)num_sources; i++)
+	{
+		if (sources[i].current_term)
+			pfree(sources[i].current_term);
+		if (sources[i].string_offsets)
+			pfree(sources[i].string_offsets);
+		sources[i].reader = NULL;
+	}
+	for (i = 0; i < num_refs; i++)
+	{
+		if (readers[i])
+			tp_segment_close(readers[i]);
+	}
+	for (w = 0; w < nworkers; w++)
+	{
+		if (file_opened[w])
+			BufFileClose(open_files[w]);
+	}
+
+	MemoryContextDelete(merge_ctx);
+	pfree(refs);
+	pfree(readers);
+	pfree(sources);
+	pfree(open_files);
+	pfree(file_opened);
+}
+
+/* ----------------------------------------------------------------
+ * Worker entry point
+ * ----------------------------------------------------------------
+ */
+PGDLLEXPORT void
+tp_parallel_build_worker_main(dsm_segment *seg, shm_toc *toc)
+{
+	TpParallelBuildShared  *shared;
+	TpParallelWorkerResult *my_result;
+	Relation				heap;
+	Relation				index;
+	TableScanDesc			scan;
+	Snapshot				snap;
+	TupleTableSlot		   *slot;
+	TpBuildContext		   *build_ctx;
+	MemoryContext			build_tmpctx;
+	MemoryContext			oldctx;
+	Size					budget;
+	int						worker_id;
+	BufFile				   *buffile;
+	char					file_name[64];
+	WorkerSegmentTracker	tracker;
+
+	/* Attach to shared memory */
+	shared = (TpParallelBuildShared *)
+			shm_toc_lookup(toc, TP_PARALLEL_KEY_SHARED, false);
+
+	worker_id = ParallelWorkerNumber;
+	my_result = &TpParallelWorkerResults(shared)[worker_id];
+
+	/* Open heap and index relations */
+	heap  = table_open(shared->heaprelid, AccessShareLock);
+	index = index_open(shared->indexrelid, AccessExclusiveLock);
+
+	/* Attach to SharedFileSet and create worker's BufFile */
+	SharedFileSetAttach(&shared->fileset, seg);
+	snprintf(file_name, sizeof(file_name), "tp_worker_%d", worker_id);
+	buffile = BufFileCreateFileSet(&shared->fileset.fs, file_name);
+
+	/*
+	 * Wait for leader to set up per-worker block ranges.
+	 * This is a brief spin (microseconds) after launch.
+	 */
+	while (pg_atomic_read_u32(&shared->scan_ready) == 0)
+		pg_usleep(100);
+	pg_read_barrier();
+
+	/*
+	 * Open a TID range scan limited to this worker's block range.
+	 * Each worker scans a contiguous, non-overlapping range of
+	 * heap blocks, ensuring disjoint CTIDs across workers.
+	 */
+	snap = GetTransactionSnapshot();
+#if PG_VERSION_NUM >= 180000
+	snap = RegisterSnapshot(snap);
+#endif
+
+	slot = table_slot_create(heap, NULL);
+	{
+		BlockNumber start_blk = shared->worker_start_block[worker_id];
+		BlockNumber end_blk	  = shared->worker_end_block[worker_id];
+
+		if (start_blk < end_blk)
+		{
+			ItemPointerData min_tid, max_tid;
+
+			ItemPointerSet(&min_tid, start_blk, FirstOffsetNumber);
+			ItemPointerSet(&max_tid, end_blk - 1, MaxOffsetNumber);
+			scan = table_beginscan_tidrange(heap, snap, &min_tid, &max_tid);
+		}
+		else
+		{
+			/* Empty range: no blocks assigned to this worker */
+			scan = NULL;
+		}
+	}
+
+	/*
+	 * Per-worker memory budget: split maintenance_work_mem across
+	 * workers. Minimum 64MB per worker to avoid excessive flushing.
+	 */
+	budget = (Size)maintenance_work_mem * 1024L / shared->nworkers_launched;
+	if (budget < 64L * 1024 * 1024)
+		budget = 64L * 1024 * 1024;
+
+	build_ctx = tp_build_context_create(budget);
+	tracker_init(&tracker);
+
+	build_tmpctx = AllocSetContextCreate(
+			CurrentMemoryContext,
+			"parallel build per-doc temp",
+			ALLOCSET_DEFAULT_SIZES);
+
+	/* Process tuples from this worker's block range */
+	while (scan != NULL &&
+		   table_scan_getnextslot_tidrange(scan, ForwardScanDirection, slot))
+	{
+		bool		isnull;
+		Datum		text_datum;
+		text	   *document_text;
+		ItemPointer ctid;
+		Datum		tsvector_datum;
+		TSVector	tsvector;
+		char	  **terms;
+		int32	   *frequencies;
+		int			term_count;
+		int			doc_length;
+
+		text_datum = slot_getattr(slot, shared->attnum, &isnull);
+		if (isnull)
+			goto next_tuple;
+
+		document_text = DatumGetTextPP(text_datum);
+		slot_getallattrs(slot);
+		ctid = &slot->tts_tid;
+
+		if (!ItemPointerIsValid(ctid))
+			goto next_tuple;
+
+		/* Tokenize in temporary context */
+		oldctx = MemoryContextSwitchTo(build_tmpctx);
+
+		tsvector_datum = DirectFunctionCall2Coll(
+				to_tsvector_byid,
+				InvalidOid,
+				ObjectIdGetDatum(shared->text_config_oid),
+				PointerGetDatum(document_text));
+		tsvector = DatumGetTSVector(tsvector_datum);
+
+		doc_length = tp_extract_terms_from_tsvector(
+				tsvector, &terms, &frequencies, &term_count);
+
+		MemoryContextSwitchTo(oldctx);
+
+		if (term_count > 0)
+		{
+			tp_build_context_add_document(
+					build_ctx,
+					terms,
+					frequencies,
+					term_count,
+					doc_length,
+					ctid);
+		}
+
+		/* Reset per-doc context */
+		MemoryContextReset(build_tmpctx);
+
+		/* Budget-based flush to BufFile */
+		if (tp_build_context_should_flush(build_ctx))
+		{
+			uint64 data_size;
+			uint64 seg_offset;
+
+			my_result->total_docs += build_ctx->num_docs;
+			my_result->total_len += build_ctx->total_len;
+
+			/* L0 segment starts at current end of BufFile */
+			seg_offset = tracker.buffile_end;
+			{
+				int	  fileno;
+				off_t file_offset;
+
+				tp_buffile_decompose_offset(seg_offset, &fileno, &file_offset);
+				BufFileSeek(buffile, fileno, file_offset, SEEK_SET);
+			}
+
+			data_size = tp_write_segment_to_buffile(build_ctx, buffile);
+			my_result->segment_count++;
+
+			/* Track this L0 segment */
+			tracker_add_segment(&tracker, seg_offset, data_size, 0);
+			tracker.buffile_end = seg_offset + data_size;
+
+			tp_build_context_reset(build_ctx);
+
+			/* Run compaction if L0 is full */
+			worker_maybe_compact_level(&tracker, buffile, 0);
+		}
+
+	next_tuple:
+		my_result->tuples_scanned++;
+
+		if (my_result->tuples_scanned % TP_PROGRESS_REPORT_INTERVAL == 0)
+		{
+			pg_atomic_add_fetch_u64(
+					&shared->tuples_done, TP_PROGRESS_REPORT_INTERVAL);
+			CHECK_FOR_INTERRUPTS();
+		}
+	}
+
+	/* Flush remaining data */
+	if (build_ctx->num_docs > 0)
+	{
+		uint64 data_size;
+		uint64 seg_offset;
+
+		my_result->total_docs += build_ctx->num_docs;
+		my_result->total_len += build_ctx->total_len;
+
+		seg_offset = tracker.buffile_end;
+		{
+			int	  fileno;
+			off_t file_offset;
+
+			tp_buffile_decompose_offset(seg_offset, &fileno, &file_offset);
+			BufFileSeek(buffile, fileno, file_offset, SEEK_SET);
+		}
+
+		data_size = tp_write_segment_to_buffile(build_ctx, buffile);
+		my_result->segment_count++;
+
+		tracker_add_segment(&tracker, seg_offset, data_size, 0);
+		tracker.buffile_end = seg_offset + data_size;
+
+		/* Final compaction pass */
+		worker_maybe_compact_level(&tracker, buffile, 0);
+	}
+
+	/*
+	 * Phase 1 complete: report non-consumed segments to leader.
+	 * These are the final segments after worker-side compaction.
+	 */
+	{
+		uint32 seg_idx = 0;
+		uint32 i;
+
+		for (i = 0; i < tracker.count; i++)
+		{
+			WorkerSegmentEntry *e = &tracker.entries[i];
+
+			if (e->consumed)
+				continue;
+
+			if (seg_idx >= TP_MAX_WORKER_SEGMENTS)
+			{
+				elog(WARNING,
+					 "worker %d has too many segments (%u), "
+					 "truncating",
+					 worker_id,
+					 tracker.count);
+				break;
+			}
+
+			my_result->seg_offsets[seg_idx] = e->offset;
+			my_result->seg_sizes[seg_idx]	= e->data_size;
+			my_result->seg_levels[seg_idx]	= e->level;
+			seg_idx++;
+		}
+		my_result->final_segment_count = seg_idx;
+	}
+
+	/* Export BufFile so leader can reopen if needed */
+	BufFileExportFileSet(buffile);
+	BufFileClose(buffile);
+
+	/* Cleanup Phase 1 resources (keep heap/index open for Phase 2) */
+	tp_build_context_destroy(build_ctx);
+	tracker_destroy(&tracker);
+	MemoryContextDelete(build_tmpctx);
+
+	if (scan != NULL)
+		table_endscan(scan);
+#if PG_VERSION_NUM >= 180000
+	UnregisterSnapshot(snap);
+#endif
+	ExecDropSingleTupleTableSlot(slot);
+
+	/* Signal Phase 1 done, wait for leader to pre-extend */
+	pg_atomic_fetch_add_u32(&shared->phase1_done, 1);
+	ConditionVariableBroadcast(&shared->all_done_cv);
+
+	ConditionVariablePrepareToSleep(&shared->phase2_cv);
+	while (pg_atomic_read_u32(&shared->phase2_ready) == 0)
+		ConditionVariableSleep(&shared->phase2_cv, PG_WAIT_EXTENSION);
+	ConditionVariableCancelSleep();
+
+	/*
+	 * Phase 2: COPY own segments + work-steal merge groups.
+	 *
+	 * Step 1: Copy own non-merged segments to index pages.
+	 * Each COPY bulk-claims a contiguous page range for the segment.
+	 */
+	{
+		bool	 has_copy_segs = false;
+		BufFile *rdfile		   = NULL;
+		uint32	 s;
+
+		for (s = 0; s < my_result->final_segment_count; s++)
+		{
+			if (my_result->seg_merge_group[s] == 0)
+			{
+				has_copy_segs = true;
+				break;
+			}
+		}
+
+		if (has_copy_segs)
+		{
+			snprintf(file_name, sizeof(file_name), "tp_worker_%d", worker_id);
+			rdfile = BufFileOpenFileSet(
+					&shared->fileset.fs, file_name, O_RDONLY, false);
+
+			for (s = 0; s < my_result->final_segment_count; s++)
+			{
+				uint64			 pages;
+				uint64			 pool_start;
+				pg_atomic_uint64 local_counter;
+				BlockNumber		 seg_root;
+
+				if (my_result->seg_merge_group[s] != 0)
+					continue;
+
+				/* Bulk-claim contiguous pages for this segment */
+				pages = compute_segment_pages(my_result->seg_sizes[s]);
+				pool_start =
+						pg_atomic_fetch_add_u64(&shared->next_page, pages);
+				pg_atomic_init_u64(&local_counter, pool_start);
+
+				seg_root = write_temp_segment_to_index_parallel(
+						index,
+						rdfile,
+						my_result->seg_offsets[s],
+						my_result->seg_sizes[s],
+						&local_counter);
+
+				/* Set level in segment header */
+				{
+					Buffer			 hdr_buf;
+					Page			 hdr_page;
+					TpSegmentHeader *hdr;
+
+					hdr_buf = ReadBuffer(index, seg_root);
+					LockBuffer(hdr_buf, BUFFER_LOCK_EXCLUSIVE);
+					hdr_page   = BufferGetPage(hdr_buf);
+					hdr		   = (TpSegmentHeader *)PageGetContents(hdr_page);
+					hdr->level = my_result->seg_levels[s];
+					MarkBufferDirty(hdr_buf);
+					UnlockReleaseBuffer(hdr_buf);
+				}
+
+				my_result->seg_roots[s] = seg_root;
+			}
+
+			BufFileClose(rdfile);
+		}
+	}
+
+	/*
+	 * Step 2: Work-steal merge groups.
+	 * Each worker claims groups via atomic counter until all done.
+	 */
+	{
+		uint32 g;
+
+		while ((g = pg_atomic_fetch_add_u32(&shared->next_merge_group, 1)) <
+			   shared->num_merge_groups)
+			worker_execute_merge_group(shared, index, g);
+	}
+
+	index_close(index, AccessExclusiveLock);
+	table_close(heap, AccessShareLock);
+
+	/* Signal all work complete */
+	pg_atomic_fetch_add_u32(&shared->workers_done, 1);
+	ConditionVariableSignal(&shared->all_done_cv);
+}
+
+/* ----------------------------------------------------------------
+ * Leader: main parallel build entry point
+ * ----------------------------------------------------------------
  */
 IndexBuildResult *
 tp_build_parallel(
@@ -132,38 +1390,13 @@ tp_build_parallel(
 	TpParallelBuildShared *shared;
 	Snapshot			   snapshot;
 	Size				   shmem_size;
-	dsa_area			  *dsa;
 	int					   launched;
+	uint64				   total_docs = 0;
+	uint64				   total_len  = 0;
 
 	/* Ensure reasonable number of workers */
 	if (nworkers > TP_MAX_PARALLEL_WORKERS)
 		nworkers = TP_MAX_PARALLEL_WORKERS;
-
-	/*
-	 * Cap workers based on memory budget.  Each worker needs at
-	 * least 32MB of DSA for its two double-buffered memtables.
-	 * We allow maintenance_work_mem (total) to be shared across
-	 * workers, requiring a minimum of 32MB per worker.
-	 */
-	{
-		int mwm_mb		   = maintenance_work_mem / 1024;
-		int max_affordable = mwm_mb / 32;
-
-		if (max_affordable < 1)
-			max_affordable = 1;
-		if (nworkers > max_affordable)
-		{
-			ereport(NOTICE,
-					(errmsg("parallel index build: reducing "
-							"workers from %d to %d to fit "
-							"memory budget (increase "
-							"maintenance_work_mem to allow "
-							"more workers)",
-							nworkers,
-							max_affordable)));
-			nworkers = max_affordable;
-		}
-	}
 
 	/* Report loading phase */
 	pgstat_progress_update_param(
@@ -199,11 +1432,6 @@ tp_build_parallel(
 
 	InitializeParallelDSM(pcxt);
 
-	/* Create DSA for shared memtable allocations */
-	dsa = dsa_create(TP_TRANCHE_BUILD_DSA);
-	dsa_pin(dsa);
-	dsa_pin_mapping(dsa);
-
 	/* Allocate and initialize shared state */
 	shared = (TpParallelBuildShared *)shm_toc_allocate(pcxt->toc, shmem_size);
 	tp_init_parallel_shared(
@@ -214,11 +1442,10 @@ tp_build_parallel(
 			indexInfo->ii_IndexAttrNumbers[0],
 			k1,
 			b,
-			nworkers,
-			dsa);
+			nworkers);
 
-	/* Initialize parallel table scan */
-	table_parallelscan_initialize(heap, TpParallelTableScan(shared), snapshot);
+	/* Initialize SharedFileSet for worker temp files */
+	SharedFileSetInit(&shared->fileset, pcxt->seg);
 
 	/* Insert shared state into TOC */
 	shm_toc_insert(pcxt->toc, TP_PARALLEL_KEY_SHARED, shared);
@@ -232,154 +1459,260 @@ tp_build_parallel(
 				(errcode(ERRCODE_INSUFFICIENT_RESOURCES),
 				 errmsg("parallel index build: could not launch "
 						"any workers"),
-				 errhint("Increase max_worker_processes or reduce "
+				 errhint("Increase max_worker_processes or "
+						 "reduce "
 						 "max_parallel_maintenance_workers.")));
 
-	/*
-	 * Update nworkers to actual launched count.  The leader loop
-	 * waits for workers_done >= nworkers, so if fewer workers
-	 * launched than requested, the old value would cause a
-	 * deadlock.
-	 */
-	if (launched < nworkers)
-		shared->nworkers = launched;
-
 	ereport(NOTICE,
-			(errmsg("parallel index build: launched %d of %d requested "
-					"workers",
+			(errmsg("parallel index build: launched %d of %d "
+					"requested workers",
 					launched,
 					nworkers)));
 
 	/*
-	 * Leader processes worker memtables and writes segments.
-	 * This continues until all workers are done.
+	 * Compute per-worker block ranges for disjoint TID scans.
+	 * Must be done after launch so we know `launched`. Workers
+	 * spin on scan_ready until ranges are set.
 	 */
-	tp_leader_process_buffers(shared, index, dsa);
+	{
+		BlockNumber nblocks			  = RelationGetNumberOfBlocks(heap);
+		BlockNumber blocks_per_worker = nblocks / launched;
+		BlockNumber remainder		  = nblocks % launched;
+		BlockNumber cursor			  = 0;
+		int			i;
 
-	/* Wait for all workers to finish */
-	WaitForParallelWorkersToFinish(pcxt);
+		for (i = 0; i < launched; i++)
+		{
+			BlockNumber count = blocks_per_worker +
+								(i < (int)remainder ? 1 : 0);
+			shared->worker_start_block[i] = cursor;
+			shared->worker_end_block[i]	  = cursor + count;
+			cursor += count;
+		}
+		shared->nworkers_launched = launched;
+		pg_write_barrier();
+		pg_atomic_write_u32(&shared->scan_ready, 1);
+	}
+
+	/*
+	 * Phase 1 wait: wait for all workers to finish BufFile phase.
+	 * Workers signal phase1_done and then block on phase2_cv.
+	 */
+	ConditionVariablePrepareToSleep(&shared->all_done_cv);
+	while (pg_atomic_read_u32(&shared->phase1_done) < (uint32)launched)
+	{
+		pgstat_progress_update_param(
+				PROGRESS_CREATEIDX_TUPLES_DONE,
+				(int64)pg_atomic_read_u64(&shared->tuples_done));
+
+		ConditionVariableTimedSleep(
+				&shared->all_done_cv, 1000 /* ms */, PG_WAIT_EXTENSION);
+	}
+	ConditionVariableCancelSleep();
+	/* Collect corpus stats from all workers */
+	{
+		TpParallelWorkerResult *results;
+		int						i;
+
+		results = TpParallelWorkerResults(shared);
+		for (i = 0; i < launched; i++)
+		{
+			total_docs += results[i].total_docs;
+			total_len += results[i].total_len;
+		}
+	}
 
 	/* Report final tuple count */
 	pgstat_progress_update_param(
-			PROGRESS_CREATEIDX_TUPLES_DONE,
-			(int64)pg_atomic_read_u64(&shared->total_docs));
+			PROGRESS_CREATEIDX_TUPLES_DONE, (int64)total_docs);
 
-	/* Report compacting phase (metapage update, compaction, truncation) */
+	/* Report writing phase */
 	pgstat_progress_update_param(
-			PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_COMPACTING);
+			PROGRESS_CREATEIDX_SUBPHASE, TP_PHASE_WRITING);
 
-	/* Update metapage with L0 chain and statistics */
+	/*
+	 * Plan cross-worker merge groups and compute total pages.
+	 */
+	{
+		TpParallelWorkerResult *results = TpParallelWorkerResults(shared);
+
+		plan_merge_groups(shared, results, launched);
+	}
+
+	/*
+	 * Pre-extend relation for all worker segments + merge groups.
+	 */
+	{
+		TpParallelWorkerResult *results		= TpParallelWorkerResults(shared);
+		uint64					total_pages = 0;
+		BlockNumber				start_blk;
+
+#define EXTEND_BATCH_SIZE 8192
+
+		total_pages = compute_total_pages_needed(shared, results, launched);
+		start_blk	= RelationGetNumberOfBlocks(index);
+
+		/* Extend relation in batches to limit buffer pin count */
+		{
+			uint64 remaining = total_pages;
+
+			while (remaining > 0)
+			{
+				uint32	batch = (uint32)Min(remaining, EXTEND_BATCH_SIZE);
+				Buffer *bufs  = palloc(batch * sizeof(Buffer));
+				uint32	extended;
+				uint32	j;
+
+				ExtendBufferedRelBy(
+						BMR_REL(index),
+						MAIN_FORKNUM,
+						NULL,
+						0,
+						batch,
+						bufs,
+						&extended);
+
+				for (j = 0; j < extended; j++)
+				{
+					LockBuffer(bufs[j], BUFFER_LOCK_EXCLUSIVE);
+					PageInit(BufferGetPage(bufs[j]), BLCKSZ, 0);
+					MarkBufferDirty(bufs[j]);
+					UnlockReleaseBuffer(bufs[j]);
+				}
+				pfree(bufs);
+				remaining -= extended;
+			}
+		}
+
+		/* Set atomic page counter to the start of pre-allocated region */
+		pg_atomic_write_u64(&shared->next_page, (uint64)start_blk);
+	}
+
+	/* Signal Phase 2: pages are ready */
+	pg_atomic_write_u32(&shared->phase2_ready, 1);
+	ConditionVariableBroadcast(&shared->phase2_cv);
+
+	/*
+	 * Phase 2 wait: workers write segments to index pages.
+	 * Wait for all workers to complete.
+	 */
+	ConditionVariablePrepareToSleep(&shared->all_done_cv);
+	while (pg_atomic_read_u32(&shared->workers_done) < (uint32)launched)
+	{
+		ConditionVariableTimedSleep(
+				&shared->all_done_cv, 1000 /* ms */, PG_WAIT_EXTENSION);
+	}
+	ConditionVariableCancelSleep();
+	WaitForParallelWorkersToFinish(pcxt);
+
+	/*
+	 * Link segments into per-level chains in metapage.
+	 * COPY segments go to their original level; merge group
+	 * results go to merge_group_levels[g].
+	 */
 	{
 		Buffer			metabuf;
 		Page			metapage;
 		TpIndexMetaPage metap;
+		BlockNumber		level_heads[TP_MAX_LEVELS];
+		BlockNumber		level_tails[TP_MAX_LEVELS];
+		uint16			level_counts[TP_MAX_LEVELS];
+		int				lv;
+		int				i;
+		uint32			g;
 
-		metabuf = ReadBuffer(index, 0);
+		TpParallelWorkerResult *results = TpParallelWorkerResults(shared);
+
+		for (lv = 0; lv < TP_MAX_LEVELS; lv++)
+		{
+			level_heads[lv]	 = InvalidBlockNumber;
+			level_tails[lv]	 = InvalidBlockNumber;
+			level_counts[lv] = 0;
+		}
+
+		/* Helper macro: append seg_root to level chain */
+#define APPEND_TO_LEVEL(seg_root, lv)                                  \
+	do                                                                 \
+	{                                                                  \
+		if (level_tails[lv] != InvalidBlockNumber)                     \
+		{                                                              \
+			Buffer			 tb;                                       \
+			Page			 tp;                                       \
+			TpSegmentHeader *th;                                       \
+                                                                       \
+			tb = ReadBuffer(index, level_tails[lv]);                   \
+			LockBuffer(tb, BUFFER_LOCK_EXCLUSIVE);                     \
+			tp				 = BufferGetPage(tb);                      \
+			th				 = (TpSegmentHeader *)PageGetContents(tp); \
+			th->next_segment = (seg_root);                             \
+			MarkBufferDirty(tb);                                       \
+			UnlockReleaseBuffer(tb);                                   \
+		}                                                              \
+		else                                                           \
+		{                                                              \
+			level_heads[lv] = (seg_root);                              \
+		}                                                              \
+		level_tails[lv] = (seg_root);                                  \
+		level_counts[lv]++;                                            \
+	} while (0)
+
+		/* Add COPY segments */
+		for (i = 0; i < launched; i++)
+		{
+			uint32 s;
+
+			for (s = 0; s < results[i].final_segment_count; s++)
+			{
+				if (results[i].seg_merge_group[s] != 0)
+					continue;
+
+				APPEND_TO_LEVEL(
+						results[i].seg_roots[s], results[i].seg_levels[s]);
+			}
+		}
+
+		/* Add merge group results */
+		for (g = 0; g < shared->num_merge_groups; g++)
+		{
+			BlockNumber root = shared->merge_group_results[g];
+
+			if (root == InvalidBlockNumber)
+				continue;
+
+			APPEND_TO_LEVEL(root, shared->merge_group_levels[g]);
+		}
+
+#undef APPEND_TO_LEVEL
+
+		/* Update metapage with per-level chains and corpus stats */
+		metabuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
 		LockBuffer(metabuf, BUFFER_LOCK_EXCLUSIVE);
 		metapage = BufferGetPage(metabuf);
 		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
 
-		metap->level_heads[0]  = shared->segment_head;
-		metap->level_counts[0] = shared->segment_count;
-		metap->total_docs = (int32)pg_atomic_read_u64(&shared->total_docs);
-		metap->total_len  = (int64)pg_atomic_read_u64(&shared->total_len);
+		for (lv = 0; lv < TP_MAX_LEVELS; lv++)
+		{
+			metap->level_heads[lv]	= level_heads[lv];
+			metap->level_counts[lv] = level_counts[lv];
+		}
+		metap->total_docs = total_docs;
+		metap->total_len  = total_len;
 
 		MarkBufferDirty(metabuf);
 		UnlockReleaseBuffer(metabuf);
-
-		/* Run compaction if needed (threshold is 8 segments per level) */
-		tp_maybe_compact_level(index, 0);
 	}
 
-	/*
-	 * Final truncation: after compaction, L0 segment pages are freed but the
-	 * file isn't shrunk. We truncate to the minimum needed size by finding
-	 * the highest used block from segment locations.
-	 *
-	 * We use tp_segment_collect_pages to get ALL pages (data + page index)
-	 * since page index pages can be located anywhere in the file.
-	 */
-	{
-		Buffer			metabuf;
-		Page			metapage;
-		TpIndexMetaPage metap;
-		BlockNumber		max_used = 1; /* At least metapage */
-		int				level;
+	tp_truncate_dead_pages(index);
 
-		metabuf	 = ReadBuffer(index, 0);
-		metapage = BufferGetPage(metabuf);
-		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
-
-		/* Find highest block used by any segment */
-		for (level = 0; level < TP_MAX_LEVELS; level++)
-		{
-			BlockNumber seg = metap->level_heads[level];
-			while (seg != InvalidBlockNumber)
-			{
-				BlockNumber *pages;
-				uint32		 num_pages;
-				uint32		 i;
-				BlockNumber	 next_seg;
-
-				/* Collect all pages including page index pages */
-				num_pages = tp_segment_collect_pages(index, seg, &pages);
-
-				/* Find max block number */
-				for (i = 0; i < num_pages; i++)
-				{
-					/* max_used is exclusive (block after the last used) */
-					if (pages[i] + 1 > max_used)
-						max_used = pages[i] + 1;
-				}
-
-				/* Get next segment before freeing pages array */
-				{
-					TpSegmentReader *reader = tp_segment_open(index, seg);
-					next_seg				= reader->header->next_segment;
-					tp_segment_close(reader);
-				}
-
-				if (pages)
-					pfree(pages);
-
-				seg = next_seg;
-			}
-		}
-		ReleaseBuffer(metabuf);
-
-		/* Truncate if we can save space */
-		{
-			BlockNumber nblocks = RelationGetNumberOfBlocks(index);
-			if (max_used < nblocks)
-			{
-				ForkNumber forknum = MAIN_FORKNUM;
-				elog(DEBUG1,
-					 "Final truncation: max_used=%u, nblocks=%u, saving %u "
-					 "pages",
-					 max_used,
-					 nblocks,
-					 nblocks - max_used);
-#if PG_VERSION_NUM >= 180000
-				smgrtruncate(
-						RelationGetSmgr(index),
-						&forknum,
-						1,
-						&nblocks,
-						&max_used);
-#else
-				smgrtruncate(RelationGetSmgr(index), &forknum, 1, &max_used);
-#endif
-			}
-		}
-	}
+	/* Flush all relation buffers to disk */
+	FlushRelationBuffers(index);
 
 	/* Build result */
 	result				 = palloc0(sizeof(IndexBuildResult));
-	result->heap_tuples	 = (double)pg_atomic_read_u64(&shared->total_docs);
-	result->index_tuples = (double)pg_atomic_read_u64(&shared->total_docs);
+	result->heap_tuples	 = (double)total_docs;
+	result->index_tuples = (double)total_docs;
 
 	/* Cleanup */
-	dsa_detach(dsa);
 	DestroyParallelContext(pcxt);
 	ExitParallelMode();
 #if PG_VERSION_NUM >= 180000
@@ -387,1838 +1720,4 @@ tp_build_parallel(
 #endif
 
 	return result;
-}
-
-/*
- * Initialize shared state for parallel build
- */
-static void
-tp_init_parallel_shared(
-		TpParallelBuildShared *shared,
-		Relation			   heap,
-		Relation			   index,
-		Oid					   text_config_oid,
-		AttrNumber			   attnum,
-		double				   k1,
-		double				   b,
-		int					   nworkers,
-		dsa_area			  *dsa)
-{
-	TpWorkerState *worker_states;
-	int			   i;
-
-	memset(shared, 0, sizeof(TpParallelBuildShared));
-
-	/* Immutable configuration */
-	shared->heaprelid		= RelationGetRelid(heap);
-	shared->indexrelid		= RelationGetRelid(index);
-	shared->text_config_oid = text_config_oid;
-	shared->attnum			= attnum;
-	shared->k1				= k1;
-	shared->b				= b;
-	shared->nworkers		= nworkers;
-
-	/* DSA handle for workers to attach */
-	shared->memtable_dsa_handle = dsa_get_handle(dsa);
-
-	/* Initialize coordination primitives */
-	SpinLockInit(&shared->mutex);
-	ConditionVariableInit(&shared->leader_wake_cv);
-	shared->workers_done = 0;
-
-	/* Initialize atomic counters */
-	pg_atomic_init_u64(&shared->total_docs, 0);
-	pg_atomic_init_u64(&shared->total_len, 0);
-
-	/* Initialize segment tracking */
-	shared->segment_head  = InvalidBlockNumber;
-	shared->segment_tail  = InvalidBlockNumber;
-	shared->segment_count = 0;
-
-	/* Initialize per-worker state */
-	worker_states = TpParallelWorkerStates(shared);
-	for (i = 0; i < nworkers; i++)
-	{
-		int j;
-
-		pg_atomic_init_u32(&worker_states[i].active_buffer, 0);
-		pg_atomic_init_u32(&worker_states[i].scan_complete, 0);
-		pg_atomic_init_u64(&worker_states[i].tuples_scanned, 0);
-
-		ConditionVariableInit(&worker_states[i].buffer_ready_cv);
-		ConditionVariableInit(&worker_states[i].buffer_consumed_cv);
-
-		/* Initialize both buffers - leader creates all hash tables upfront */
-		for (j = 0; j < 2; j++)
-		{
-			dshash_table *string_table;
-			dshash_table *doclength_table;
-
-			pg_atomic_init_u32(
-					&worker_states[i].buffers[j].status, TP_BUFFER_EMPTY);
-
-			/* Create string hash table */
-			string_table = tp_worker_create_string_table(dsa);
-			worker_states[i].buffers[j].string_hash_handle =
-					dshash_get_hash_table_handle(string_table);
-			dshash_detach(string_table);
-
-			/* Create document length hash table */
-			doclength_table = tp_worker_create_doclength_table(dsa);
-			worker_states[i].buffers[j].doc_lengths_handle =
-					dshash_get_hash_table_handle(doclength_table);
-			dshash_detach(doclength_table);
-
-			worker_states[i].buffers[j].num_docs	   = 0;
-			worker_states[i].buffers[j].total_len	   = 0;
-			worker_states[i].buffers[j].total_postings = 0;
-		}
-	}
-}
-
-/*
- * Worker entry point - called by parallel infrastructure
- */
-PGDLLEXPORT void
-tp_parallel_build_worker_main(
-		dsm_segment *seg __attribute__((unused)), shm_toc *toc)
-{
-	TpParallelBuildShared *shared;
-	TpWorkerState		  *my_state;
-	Relation			   heap;
-	TableScanDesc		   scan;
-	TupleTableSlot		  *slot;
-	dsa_area			  *dsa;
-	int					   worker_id;
-	int					   active_buf;
-
-	/* Attach to shared memory */
-	shared = (TpParallelBuildShared *)
-			shm_toc_lookup(toc, TP_PARALLEL_KEY_SHARED, false);
-
-	worker_id = ParallelWorkerNumber;
-	my_state  = &TpParallelWorkerStates(shared)[worker_id];
-
-	/* Attach to shared DSA */
-	dsa = dsa_attach(shared->memtable_dsa_handle);
-	dsa_pin_mapping(dsa);
-
-	/* Open heap relation */
-	heap = table_open(shared->heaprelid, AccessShareLock);
-
-	/* Join parallel table scan */
-	scan = table_beginscan_parallel(heap, TpParallelTableScan(shared));
-	slot = table_slot_create(heap, NULL);
-
-	/* Start with buffer 0 */
-	active_buf = 0;
-	pg_atomic_write_u32(&my_state->active_buffer, active_buf);
-	pg_atomic_write_u32(
-			&my_state->buffers[active_buf].status, TP_BUFFER_FILLING);
-
-	/* Process tuples */
-	while (table_scan_getnextslot(scan, ForwardScanDirection, slot))
-	{
-		TpWorkerMemtableBuffer *buffer = &my_state->buffers[active_buf];
-
-		/*
-		 * Check if we need to switch buffers.
-		 * Use posting count threshold to match serial build's segment sizes.
-		 * Serial uses tp_memtable_spill_threshold (default 32M postings).
-		 */
-		if (buffer->total_postings >= tp_memtable_spill_threshold)
-		{
-			/* Mark current buffer as ready */
-			pg_atomic_write_u32(&buffer->status, TP_BUFFER_READY);
-			ConditionVariableSignal(&my_state->buffer_ready_cv);
-			ConditionVariableSignal(&shared->leader_wake_cv);
-
-			/* Switch to other buffer */
-			active_buf = 1 - active_buf;
-			buffer	   = &my_state->buffers[active_buf];
-
-			/* Wait for other buffer to be empty */
-			while (pg_atomic_read_u32(&buffer->status) != TP_BUFFER_EMPTY)
-			{
-				ConditionVariableSleep(
-						&my_state->buffer_consumed_cv,
-						WAIT_EVENT_PARALLEL_CREATE_INDEX_SCAN);
-				CHECK_FOR_INTERRUPTS();
-			}
-			ConditionVariableCancelSleep();
-
-			/* Start filling the new buffer */
-			pg_atomic_write_u32(&my_state->active_buffer, active_buf);
-			pg_atomic_write_u32(&buffer->status, TP_BUFFER_FILLING);
-		}
-
-		/* Process document into current buffer */
-		tp_worker_process_document(
-				dsa,
-				&my_state->buffers[active_buf],
-				slot,
-				shared->attnum,
-				shared->text_config_oid);
-
-		pg_atomic_fetch_add_u64(&my_state->tuples_scanned, 1);
-
-		CHECK_FOR_INTERRUPTS();
-	}
-
-	/* Mark final buffer as ready if it has data */
-	{
-		TpWorkerMemtableBuffer *buffer = &my_state->buffers[active_buf];
-		if (buffer->num_docs > 0)
-		{
-			pg_atomic_write_u32(&buffer->status, TP_BUFFER_READY);
-			ConditionVariableSignal(&my_state->buffer_ready_cv);
-			ConditionVariableSignal(&shared->leader_wake_cv);
-		}
-		else
-		{
-			pg_atomic_write_u32(&buffer->status, TP_BUFFER_EMPTY);
-		}
-	}
-
-	/* Mark scan complete */
-	pg_atomic_write_u32(&my_state->scan_complete, 1);
-
-	/*
-	 * Note: Global stats (total_docs, total_len) are accumulated by the leader
-	 * when processing each buffer, not by workers. This is because the leader
-	 * clears buffer stats after processing, so worker accumulation would be
-	 * incorrect.
-	 */
-
-	/* Signal completion */
-	SpinLockAcquire(&shared->mutex);
-	shared->workers_done++;
-	SpinLockRelease(&shared->mutex);
-	ConditionVariableSignal(&shared->leader_wake_cv);
-
-	/* Cleanup */
-	table_endscan(scan);
-	ExecDropSingleTupleTableSlot(slot);
-	table_close(heap, AccessShareLock);
-	dsa_detach(dsa);
-}
-
-/*
- * Merge source for streaming N-way merge from worker buffers.
- * Tracks current position in a buffer's sorted term array.
- */
-typedef struct TpWorkerMergeSource
-{
-	dsa_area			   *dsa;		 /* DSA area */
-	TpWorkerMemtableBuffer *buffer;		 /* The buffer being merged */
-	TermInfo			   *terms;		 /* Sorted term array */
-	uint32					num_terms;	 /* Total terms */
-	uint32					current_idx; /* Current position */
-	bool					exhausted;	 /* No more terms */
-} TpWorkerMergeSource;
-
-/*
- * Initialize a worker merge source.
- * Builds sorted term array from the buffer's string hash table.
- */
-static bool
-worker_merge_source_init(
-		TpWorkerMergeSource	   *source,
-		dsa_area			   *dsa,
-		TpWorkerMemtableBuffer *buffer)
-{
-	memset(source, 0, sizeof(TpWorkerMergeSource));
-	source->dsa		  = dsa;
-	source->buffer	  = buffer;
-	source->exhausted = true;
-
-	if (buffer->num_docs == 0)
-		return false;
-
-	/* Build sorted dictionary from buffer */
-	source->terms = build_dictionary_from_worker_buffer(
-			dsa, buffer, &source->num_terms);
-
-	if (source->num_terms == 0 || source->terms == NULL)
-		return false;
-
-	source->current_idx = 0;
-	source->exhausted	= false;
-	return true;
-}
-
-/*
- * Advance a worker merge source to the next term.
- */
-static bool
-worker_merge_source_advance(TpWorkerMergeSource *source)
-{
-	if (source->exhausted)
-		return false;
-
-	source->current_idx++;
-	if (source->current_idx >= source->num_terms)
-	{
-		source->exhausted = true;
-		return false;
-	}
-	return true;
-}
-
-/*
- * Close and cleanup a worker merge source.
- */
-static void
-worker_merge_source_close(TpWorkerMergeSource *source)
-{
-	if (source->terms)
-	{
-		tp_free_dictionary(source->terms, source->num_terms);
-		source->terms = NULL;
-	}
-}
-
-/*
- * Find the merge source with the lexicographically smallest current term.
- * Returns -1 if all sources are exhausted.
- */
-static int
-worker_merge_find_min_source(TpWorkerMergeSource *sources, int num_sources)
-{
-	int			min_idx	 = -1;
-	const char *min_term = NULL;
-	int			i;
-
-	for (i = 0; i < num_sources; i++)
-	{
-		if (sources[i].exhausted)
-			continue;
-
-		if (min_idx < 0 ||
-			strcmp(sources[i].terms[sources[i].current_idx].term, min_term) <
-					0)
-		{
-			min_idx	 = i;
-			min_term = sources[i].terms[sources[i].current_idx].term;
-		}
-	}
-
-	return min_idx;
-}
-
-/*
- * Reference to a buffer that contains a particular term.
- */
-typedef struct TpBufferTermRef
-{
-	int			source_idx;		 /* Index into sources array */
-	dsa_pointer posting_list_dp; /* Pointer to posting list in DSA */
-} TpBufferTermRef;
-
-/*
- * Merged term info - tracks which buffers have this term.
- */
-typedef struct TpMergedBufferTerm
-{
-	char			*term;			  /* Term text (palloc'd copy) */
-	uint32			 term_len;		  /* Term length */
-	TpBufferTermRef *buffer_refs;	  /* Which buffers have this term */
-	uint32			 num_buffer_refs; /* Number of buffer refs */
-	uint32			 buffer_refs_cap; /* Allocated capacity */
-} TpMergedBufferTerm;
-
-/*
- * Add a buffer reference to a merged term.
- */
-static void
-merged_buffer_term_add_ref(
-		TpMergedBufferTerm *term, int source_idx, dsa_pointer posting_list_dp)
-{
-	if (term->num_buffer_refs >= term->buffer_refs_cap)
-	{
-		uint32 new_cap = term->buffer_refs_cap == 0
-							   ? 4
-							   : term->buffer_refs_cap * 2;
-		if (term->buffer_refs == NULL)
-			term->buffer_refs = palloc(new_cap * sizeof(TpBufferTermRef));
-		else
-			term->buffer_refs = repalloc(
-					term->buffer_refs, new_cap * sizeof(TpBufferTermRef));
-		term->buffer_refs_cap = new_cap;
-	}
-
-	term->buffer_refs[term->num_buffer_refs].source_idx		 = source_idx;
-	term->buffer_refs[term->num_buffer_refs].posting_list_dp = posting_list_dp;
-	term->num_buffer_refs++;
-}
-
-/*
- * Posting info during N-way merge of postings from multiple buffers.
- */
-typedef struct TpBufferPostingInfo
-{
-	ItemPointerData ctid;
-	uint16			frequency;
-} TpBufferPostingInfo;
-
-/*
- * Posting merge source for streaming from a single buffer's posting list.
- */
-typedef struct TpBufferPostingSource
-{
-	dsa_area	   *dsa;
-	TpPostingList  *posting_list;
-	TpPostingEntry *entries;
-	uint32			current_idx;
-	uint32			doc_count;
-	bool			exhausted;
-} TpBufferPostingSource;
-
-/*
- * Initialize a posting source for a buffer's posting list.
- */
-static void
-buffer_posting_source_init(
-		TpBufferPostingSource *ps, dsa_area *dsa, dsa_pointer posting_list_dp)
-{
-	memset(ps, 0, sizeof(TpBufferPostingSource));
-	ps->dsa		  = dsa;
-	ps->exhausted = true;
-
-	if (!DsaPointerIsValid(posting_list_dp))
-		return;
-
-	ps->posting_list = dsa_get_address(dsa, posting_list_dp);
-	if (!ps->posting_list || ps->posting_list->doc_count == 0)
-		return;
-
-	if (!DsaPointerIsValid(ps->posting_list->entries_dp))
-		return;
-
-	ps->entries	  = dsa_get_address(dsa, ps->posting_list->entries_dp);
-	ps->doc_count = ps->posting_list->doc_count;
-	ps->exhausted = false;
-}
-
-/*
- * Advance a buffer posting source.
- */
-static bool
-buffer_posting_source_advance(TpBufferPostingSource *ps)
-{
-	if (ps->exhausted)
-		return false;
-
-	ps->current_idx++;
-	if (ps->current_idx >= ps->doc_count)
-	{
-		ps->exhausted = true;
-		return false;
-	}
-	return true;
-}
-
-/*
- * Find the posting source with the smallest current CTID.
- */
-static int
-find_min_buffer_posting_source(TpBufferPostingSource *sources, int num_sources)
-{
-	int				min_idx = -1;
-	ItemPointerData min_ctid;
-	int				i;
-
-	for (i = 0; i < num_sources; i++)
-	{
-		ItemPointerData ctid;
-
-		if (sources[i].exhausted)
-			continue;
-
-		memcpy(&ctid,
-			   &sources[i].entries[sources[i].current_idx].ctid,
-			   sizeof(ItemPointerData));
-
-		if (min_idx < 0 || ItemPointerCompare(&ctid, &min_ctid) < 0)
-		{
-			min_idx = i;
-			memcpy(&min_ctid, &ctid, sizeof(ItemPointerData));
-		}
-	}
-
-	return min_idx;
-}
-
-/*
- * Collected posting for output (used during N-way posting merge).
- */
-typedef struct TpCollectedBufferPosting
-{
-	ItemPointerData ctid;
-	uint16			frequency;
-} TpCollectedBufferPosting;
-
-/*
- * Write posting blocks from a TpBlockPosting array and accumulate
- * skip entries. Returns the number of blocks written.
- */
-static uint32
-write_posting_blocks(
-		TpBlockPosting	*bp_array,
-		uint32			 bp_count,
-		TpSegmentWriter *writer,
-		TpSkipEntry	   **all_skip_entries,
-		uint32			*skip_entries_count,
-		uint32			*skip_entries_capacity)
-{
-	uint32 nblocks = (bp_count + TP_BLOCK_SIZE - 1) / TP_BLOCK_SIZE;
-	uint32 bidx;
-
-	for (bidx = 0; bidx < nblocks; bidx++)
-	{
-		TpSkipEntry skip;
-		uint32		bstart	   = bidx * TP_BLOCK_SIZE;
-		uint32		bend	   = Min(bstart + TP_BLOCK_SIZE, bp_count);
-		uint16		max_tf	   = 0;
-		uint8		min_norm   = 255;
-		uint32		last_docid = 0;
-		uint32		k;
-
-		for (k = bstart; k < bend; k++)
-		{
-			if (bp_array[k].doc_id > last_docid)
-				last_docid = bp_array[k].doc_id;
-			if (bp_array[k].frequency > max_tf)
-				max_tf = bp_array[k].frequency;
-			if (bp_array[k].fieldnorm < min_norm)
-				min_norm = bp_array[k].fieldnorm;
-		}
-
-		skip.last_doc_id	= last_docid;
-		skip.doc_count		= (uint8)(bend - bstart);
-		skip.block_max_tf	= max_tf;
-		skip.block_max_norm = min_norm;
-		skip.posting_offset = writer->current_offset;
-		memset(skip.reserved, 0, sizeof(skip.reserved));
-
-		if (tp_compress_segments)
-		{
-			uint8  cbuf[TP_MAX_COMPRESSED_BLOCK_SIZE];
-			uint32 csize =
-					tp_compress_block(&bp_array[bstart], bend - bstart, cbuf);
-			skip.flags = TP_BLOCK_FLAG_DELTA;
-			tp_segment_writer_write(writer, cbuf, csize);
-		}
-		else
-		{
-			skip.flags = TP_BLOCK_FLAG_UNCOMPRESSED;
-			tp_segment_writer_write(
-					writer,
-					&bp_array[bstart],
-					(bend - bstart) * sizeof(TpBlockPosting));
-		}
-
-		if (*skip_entries_count >= *skip_entries_capacity)
-		{
-			*skip_entries_capacity *= 2;
-			*all_skip_entries = repalloc_huge(
-					*all_skip_entries,
-					*skip_entries_capacity * sizeof(TpSkipEntry));
-		}
-		(*all_skip_entries)[(*skip_entries_count)++] = skip;
-	}
-
-	return nblocks;
-}
-
-/*
- * Initialize N-way merge posting sources for a buffer term.
- */
-static TpBufferPostingSource *
-init_buffer_term_posting_sources(
-		TpMergedBufferTerm *term, TpWorkerMergeSource *sources)
-{
-	TpBufferPostingSource *psources;
-	uint32				   i;
-
-	psources = palloc(sizeof(TpBufferPostingSource) * term->num_buffer_refs);
-	for (i = 0; i < term->num_buffer_refs; i++)
-	{
-		TpBufferTermRef		*ref	= &term->buffer_refs[i];
-		TpWorkerMergeSource *source = &sources[ref->source_idx];
-
-		buffer_posting_source_init(
-				&psources[i], source->dsa, ref->posting_list_dp);
-	}
-
-	return psources;
-}
-
-/*
- * Chunk size for streaming posting collection. 8M postings gives
- * ~64MB per buffer (collected + block), well within MaxAllocSize.
- * Most terms have far fewer postings and complete in one chunk.
- */
-#define POSTING_CHUNK_CAP (8 * 1024 * 1024)
-
-/*
- * Build merged docmap from multiple worker buffers.
- * Iterates through all document lengths from all buffers.
- */
-static TpDocMapBuilder *
-build_merged_docmap_from_buffers(
-		dsa_area *dsa, TpWorkerMergeSource *sources, int num_sources)
-{
-	TpDocMapBuilder	 *docmap;
-	dshash_parameters params;
-	int				  i;
-
-	docmap = tp_docmap_create();
-
-	params.key_size			= sizeof(ItemPointerData);
-	params.entry_size		= sizeof(TpDocLengthEntry);
-	params.hash_function	= dshash_memhash;
-	params.compare_function = dshash_memcmp;
-	params.copy_function	= dshash_memcpy;
-	params.tranche_id		= TP_DOCLENGTH_HASH_TRANCHE_ID;
-
-	for (i = 0; i < num_sources; i++)
-	{
-		TpWorkerMemtableBuffer *buffer = sources[i].buffer;
-		dshash_table		   *doclength_table;
-		dshash_seq_status		seq_status;
-		TpDocLengthEntry	   *doc_entry;
-
-		if (buffer->doc_lengths_handle == DSHASH_HANDLE_INVALID)
-			continue;
-
-		doclength_table =
-				dshash_attach(dsa, &params, buffer->doc_lengths_handle, dsa);
-
-		dshash_seq_init(&seq_status, doclength_table, false);
-		while ((doc_entry = (TpDocLengthEntry *)dshash_seq_next(
-						&seq_status)) != NULL)
-		{
-			tp_docmap_add(
-					docmap, &doc_entry->ctid, (uint32)doc_entry->doc_length);
-		}
-		dshash_seq_term(&seq_status);
-		dshash_detach(doclength_table);
-	}
-
-	tp_docmap_finalize(docmap);
-	return docmap;
-}
-
-/*
- * Per-term block information for segment writing
- */
-typedef struct MergeTermBlockInfo
-{
-	uint64 posting_offset;	 /* Absolute offset where postings were written */
-	uint16 block_count;		 /* Number of blocks for this term */
-	uint32 doc_freq;		 /* Document frequency */
-	uint32 skip_entry_start; /* Index into accumulated skip entries array */
-} MergeTermBlockInfo;
-
-/*
- * Write a segment by streaming N-way merge directly from worker buffers.
- *
- * This is the core function that merges multiple worker buffers into a single
- * segment WITHOUT copying to an intermediate local memtable. Postings are
- * streamed directly from DSA memory to disk.
- */
-static BlockNumber
-tp_merge_worker_buffers_to_segment(
-		TpWorkerMemtableBuffer **buffers,
-		int						 num_buffers,
-		Relation				 index,
-		dsa_area				*dsa)
-{
-	TpWorkerMergeSource *sources;
-	int					 num_sources	  = 0;
-	TpMergedBufferTerm	*merged_terms	  = NULL;
-	uint32				 num_merged_terms = 0;
-	uint32				 merged_capacity  = 0;
-	TpDocMapBuilder		*docmap;
-	BlockNumber			 header_block;
-	BlockNumber			 page_index_root;
-	TpSegmentWriter		 writer;
-	TpSegmentHeader		 header;
-	TpDictionary		 dict;
-	uint32				*string_offsets;
-	uint32				 string_pos;
-	uint32				 i;
-	Buffer				 header_buf;
-	Page				 header_page;
-	TpSegmentHeader		*existing_header;
-	MergeTermBlockInfo	*term_blocks;
-	TpSkipEntry			*all_skip_entries;
-	uint32				 skip_entries_count;
-	uint32				 skip_entries_capacity;
-	int64				 total_len = 0;
-
-	if (num_buffers == 0)
-		return InvalidBlockNumber;
-
-	/* Initialize merge sources from buffers */
-	sources = palloc0(sizeof(TpWorkerMergeSource) * num_buffers);
-	for (i = 0; i < (uint32)num_buffers; i++)
-	{
-		if (worker_merge_source_init(&sources[num_sources], dsa, buffers[i]))
-		{
-			total_len += buffers[i]->total_len;
-			num_sources++;
-		}
-	}
-
-	if (num_sources == 0)
-	{
-		pfree(sources);
-		return InvalidBlockNumber;
-	}
-
-	/* Build merged docmap from all buffers */
-	docmap = build_merged_docmap_from_buffers(dsa, sources, num_sources);
-
-	/*
-	 * N-way merge of terms: find min term across all sources, collect which
-	 * sources have it, advance those sources.
-	 */
-	while (true)
-	{
-		int					min_idx;
-		const char		   *min_term;
-		TpMergedBufferTerm *current_merged;
-
-		min_idx = worker_merge_find_min_source(sources, num_sources);
-		if (min_idx < 0)
-			break; /* All sources exhausted */
-
-		min_term = sources[min_idx].terms[sources[min_idx].current_idx].term;
-
-		/* Grow merged terms array if needed */
-		if (num_merged_terms >= merged_capacity)
-		{
-			merged_capacity = merged_capacity == 0 ? 1024
-												   : merged_capacity * 2;
-			if (merged_terms == NULL)
-				merged_terms = palloc(
-						merged_capacity * sizeof(TpMergedBufferTerm));
-			else
-				merged_terms = repalloc(
-						merged_terms,
-						merged_capacity * sizeof(TpMergedBufferTerm));
-		}
-
-		/* Initialize new merged term */
-		current_merged					= &merged_terms[num_merged_terms];
-		current_merged->term			= pstrdup(min_term);
-		current_merged->term_len		= strlen(min_term);
-		current_merged->buffer_refs		= NULL;
-		current_merged->num_buffer_refs = 0;
-		current_merged->buffer_refs_cap = 0;
-		num_merged_terms++;
-
-		/* Record which sources have this term */
-		for (i = 0; i < (uint32)num_sources; i++)
-		{
-			if (sources[i].exhausted)
-				continue;
-
-			if (strcmp(sources[i].terms[sources[i].current_idx].term,
-					   current_merged->term) == 0)
-			{
-				/* Record buffer ref */
-				merged_buffer_term_add_ref(
-						current_merged,
-						i,
-						sources[i]
-								.terms[sources[i].current_idx]
-								.posting_list_dp);
-
-				/* Advance this source */
-				worker_merge_source_advance(&sources[i]);
-			}
-		}
-	}
-
-	if (num_merged_terms == 0)
-	{
-		/* Cleanup and return */
-		for (i = 0; i < (uint32)num_sources; i++)
-			worker_merge_source_close(&sources[i]);
-		pfree(sources);
-		tp_docmap_destroy(docmap);
-		return InvalidBlockNumber;
-	}
-
-	/* Initialize segment writer - will extend relation as needed */
-	tp_segment_writer_init(&writer, index);
-
-	if (writer.pages_allocated > 0)
-	{
-		header_block = writer.pages[0];
-	}
-	else
-	{
-		elog(ERROR,
-			 "tp_merge_worker_buffers_to_segment: "
-			 "Failed to allocate first page");
-	}
-
-	/* Initialize header */
-	memset(&header, 0, sizeof(TpSegmentHeader));
-	header.magic		= TP_SEGMENT_MAGIC;
-	header.version		= TP_SEGMENT_FORMAT_VERSION;
-	header.created_at	= GetCurrentTimestamp();
-	header.num_pages	= 0;
-	header.num_terms	= num_merged_terms;
-	header.level		= 0;
-	header.next_segment = InvalidBlockNumber;
-
-	/* Dictionary immediately follows header */
-	header.dictionary_offset = sizeof(TpSegmentHeader);
-
-	/* Corpus statistics from accumulated buffer data */
-	header.num_docs		= docmap->num_docs;
-	header.total_tokens = total_len;
-
-	/* Write placeholder header */
-	tp_segment_writer_write(&writer, &header, sizeof(TpSegmentHeader));
-
-	/* Write dictionary section */
-	dict.num_terms = num_merged_terms;
-	tp_segment_writer_write(
-			&writer, &dict, offsetof(TpDictionary, string_offsets));
-
-	/* Build string offsets */
-	string_offsets = palloc0(num_merged_terms * sizeof(uint32));
-	string_pos	   = 0;
-	for (i = 0; i < num_merged_terms; i++)
-	{
-		string_offsets[i] = string_pos;
-		string_pos += sizeof(uint32) + merged_terms[i].term_len +
-					  sizeof(uint32);
-	}
-
-	/* Write string offsets array */
-	tp_segment_writer_write(
-			&writer, string_offsets, num_merged_terms * sizeof(uint32));
-
-	/* Write string pool */
-	header.strings_offset = writer.current_offset;
-	for (i = 0; i < num_merged_terms; i++)
-	{
-		uint32 length	   = merged_terms[i].term_len;
-		uint32 dict_offset = i * sizeof(TpDictEntry);
-
-		tp_segment_writer_write(&writer, &length, sizeof(uint32));
-		tp_segment_writer_write(&writer, merged_terms[i].term, length);
-		tp_segment_writer_write(&writer, &dict_offset, sizeof(uint32));
-	}
-
-	/* Record entries offset */
-	header.entries_offset = writer.current_offset;
-
-	/* Write placeholder dict entries */
-	{
-		TpDictEntry placeholder;
-		memset(&placeholder, 0, sizeof(TpDictEntry));
-		for (i = 0; i < num_merged_terms; i++)
-			tp_segment_writer_write(
-					&writer, &placeholder, sizeof(TpDictEntry));
-	}
-
-	/* Postings start here */
-	header.postings_offset = writer.current_offset;
-
-	/* Initialize per-term tracking and skip entry accumulator */
-	term_blocks = palloc0(num_merged_terms * sizeof(MergeTermBlockInfo));
-
-	skip_entries_capacity = 1024;
-	skip_entries_count	  = 0;
-	all_skip_entries = palloc(skip_entries_capacity * sizeof(TpSkipEntry));
-
-	/*
-	 * Allocate chunk buffers once, reused across all terms.
-	 * Most terms complete in a single chunk iteration.
-	 */
-	{
-		TpCollectedBufferPosting *chunk;
-		TpBlockPosting			 *chunk_bp;
-
-		chunk = palloc(sizeof(TpCollectedBufferPosting) * POSTING_CHUNK_CAP);
-		chunk_bp = palloc(sizeof(TpBlockPosting) * POSTING_CHUNK_CAP);
-
-		for (i = 0; i < num_merged_terms; i++)
-		{
-			TpBufferPostingSource *psources;
-			uint32				   doc_count	= 0;
-			uint32				   total_blocks = 0;
-			uint32				   chunk_num;
-
-			/* Record where this term's postings start */
-			term_blocks[i].posting_offset	= writer.current_offset;
-			term_blocks[i].skip_entry_start = skip_entries_count;
-
-			if (merged_terms[i].num_buffer_refs == 0)
-			{
-				term_blocks[i].doc_freq	   = 0;
-				term_blocks[i].block_count = 0;
-				continue;
-			}
-
-			psources = init_buffer_term_posting_sources(
-					&merged_terms[i], sources);
-
-			while (true)
-			{
-				uint32 j;
-
-				/* Fill chunk from N-way merge */
-				chunk_num = 0;
-				while (chunk_num < POSTING_CHUNK_CAP)
-				{
-					int min_idx = find_min_buffer_posting_source(
-							psources, merged_terms[i].num_buffer_refs);
-					if (min_idx < 0)
-						break;
-
-					memcpy(&chunk[chunk_num].ctid,
-						   &psources[min_idx]
-									.entries[psources[min_idx].current_idx]
-									.ctid,
-						   sizeof(ItemPointerData));
-					chunk[chunk_num].frequency =
-							psources[min_idx]
-									.entries[psources[min_idx].current_idx]
-									.frequency;
-					chunk_num++;
-					buffer_posting_source_advance(&psources[min_idx]);
-				}
-
-				if (chunk_num == 0)
-					break;
-
-				/* Convert chunk to block format */
-				for (j = 0; j < chunk_num; j++)
-				{
-					uint32 did = tp_docmap_lookup(docmap, &chunk[j].ctid);
-					if (did == UINT32_MAX)
-						elog(ERROR,
-							 "CTID (%u,%u) not found in docmap",
-							 ItemPointerGetBlockNumber(&chunk[j].ctid),
-							 ItemPointerGetOffsetNumber(&chunk[j].ctid));
-
-					chunk_bp[j].doc_id	  = did;
-					chunk_bp[j].frequency = chunk[j].frequency;
-					chunk_bp[j].fieldnorm =
-							tp_docmap_get_fieldnorm(docmap, did);
-					chunk_bp[j].reserved = 0;
-				}
-
-				/* Write blocks from this chunk */
-				total_blocks += write_posting_blocks(
-						chunk_bp,
-						chunk_num,
-						&writer,
-						&all_skip_entries,
-						&skip_entries_count,
-						&skip_entries_capacity);
-				doc_count += chunk_num;
-			}
-
-			pfree(psources);
-
-			term_blocks[i].doc_freq	   = doc_count;
-			term_blocks[i].block_count = (uint16)total_blocks;
-
-			/* Check for interrupt during long merges */
-			if ((i % 1000) == 0)
-				CHECK_FOR_INTERRUPTS();
-		}
-
-		pfree(chunk);
-		pfree(chunk_bp);
-	}
-
-	/* Skip index starts here - after all postings */
-	header.skip_index_offset = writer.current_offset;
-
-	/* Write all accumulated skip entries */
-	if (skip_entries_count > 0)
-	{
-		tp_segment_writer_write(
-				&writer,
-				all_skip_entries,
-				skip_entries_count * sizeof(TpSkipEntry));
-	}
-
-	/* Write CTID arrays - use split storage */
-	header.ctid_pages_offset = writer.current_offset;
-	if (docmap->num_docs > 0)
-	{
-		tp_segment_writer_write(
-				&writer,
-				docmap->ctid_pages,
-				docmap->num_docs * sizeof(BlockNumber));
-	}
-
-	header.ctid_offsets_offset = writer.current_offset;
-	if (docmap->num_docs > 0)
-	{
-		tp_segment_writer_write(
-				&writer,
-				docmap->ctid_offsets,
-				docmap->num_docs * sizeof(OffsetNumber));
-	}
-
-	/* Write fieldnorms */
-	header.fieldnorm_offset = writer.current_offset;
-	if (docmap->num_docs > 0)
-	{
-		tp_segment_writer_write(
-				&writer, docmap->fieldnorms, docmap->num_docs * sizeof(uint8));
-	}
-
-	/* Flush writer before writing page index and dict entries */
-	tp_segment_writer_flush(&writer);
-
-	/*
-	 * Mark buffer as empty to prevent tp_segment_writer_finish from flushing
-	 * again and overwriting our dict entry updates.
-	 */
-	writer.buffer_pos = SizeOfPageHeaderData;
-
-	/* Write page index (extends relation as needed) */
-	page_index_root =
-			write_page_index(index, writer.pages, writer.pages_allocated);
-	header.page_index = page_index_root;
-
-	/* Finalize header */
-	header.data_size = writer.current_offset;
-	header.num_pages = writer.pages_allocated;
-
-	/*
-	 * Write dictionary entries with correct skip_index_offset values.
-	 * Entries may span multiple pages, so we need page-boundary-aware code.
-	 */
-	{
-		Buffer dict_buf		= InvalidBuffer;
-		uint32 current_page = UINT32_MAX;
-
-		for (i = 0; i < num_merged_terms; i++)
-		{
-			TpDictEntry entry;
-			uint64		entry_offset;
-			uint32		entry_logical_page;
-			uint32		page_offset;
-			BlockNumber physical_block;
-
-			/* Build the entry */
-			entry.skip_index_offset =
-					header.skip_index_offset +
-					((uint64)term_blocks[i].skip_entry_start *
-					 sizeof(TpSkipEntry));
-			entry.block_count = term_blocks[i].block_count;
-			entry.reserved	  = 0;
-			entry.doc_freq	  = term_blocks[i].doc_freq;
-
-			/* Calculate where this entry is in the segment */
-			entry_offset = header.entries_offset +
-						   ((uint64)i * sizeof(TpDictEntry));
-			entry_logical_page = (uint32)(entry_offset /
-										  SEGMENT_DATA_PER_PAGE);
-			page_offset = (uint32)(entry_offset % SEGMENT_DATA_PER_PAGE);
-
-			/* Read page if different from current */
-			if (entry_logical_page != current_page)
-			{
-				if (current_page != UINT32_MAX)
-				{
-					MarkBufferDirty(dict_buf);
-					UnlockReleaseBuffer(dict_buf);
-				}
-
-				physical_block = writer.pages[entry_logical_page];
-				dict_buf	   = ReadBuffer(index, physical_block);
-				LockBuffer(dict_buf, BUFFER_LOCK_EXCLUSIVE);
-				current_page = entry_logical_page;
-			}
-
-			/* Write entry to page - handle page boundary spanning */
-			{
-				uint32 bytes_on_this_page = SEGMENT_DATA_PER_PAGE -
-											page_offset;
-
-				if (bytes_on_this_page >= sizeof(TpDictEntry))
-				{
-					/* Entry fits entirely on this page */
-					Page  page = BufferGetPage(dict_buf);
-					char *dest = (char *)page + SizeOfPageHeaderData +
-								 page_offset;
-					memcpy(dest, &entry, sizeof(TpDictEntry));
-				}
-				else
-				{
-					/* Entry spans two pages */
-					Page  page = BufferGetPage(dict_buf);
-					char *dest = (char *)page + SizeOfPageHeaderData +
-								 page_offset;
-					char *src = (char *)&entry;
-
-					/* Write first part to current page */
-					memcpy(dest, src, bytes_on_this_page);
-
-					/* Move to next page */
-					MarkBufferDirty(dict_buf);
-					UnlockReleaseBuffer(dict_buf);
-
-					entry_logical_page++;
-					if (entry_logical_page >= writer.pages_allocated)
-						ereport(ERROR,
-								(errcode(ERRCODE_INTERNAL_ERROR),
-								 errmsg("dict entry spans beyond allocated")));
-
-					physical_block = writer.pages[entry_logical_page];
-					dict_buf	   = ReadBuffer(index, physical_block);
-					LockBuffer(dict_buf, BUFFER_LOCK_EXCLUSIVE);
-					current_page = entry_logical_page;
-
-					/* Write remaining part to next page */
-					page = BufferGetPage(dict_buf);
-					dest = (char *)page + SizeOfPageHeaderData;
-					memcpy(dest,
-						   src + bytes_on_this_page,
-						   sizeof(TpDictEntry) - bytes_on_this_page);
-				}
-			}
-		}
-
-		/* Release last buffer */
-		if (current_page != UINT32_MAX)
-		{
-			MarkBufferDirty(dict_buf);
-			UnlockReleaseBuffer(dict_buf);
-		}
-	}
-
-	/* Write final header */
-	header_buf = ReadBuffer(index, header_block);
-	LockBuffer(header_buf, BUFFER_LOCK_EXCLUSIVE);
-	header_page		= BufferGetPage(header_buf);
-	existing_header = (TpSegmentHeader *)((char *)header_page +
-										  SizeOfPageHeaderData);
-
-	memcpy(existing_header, &header, sizeof(TpSegmentHeader));
-
-	MarkBufferDirty(header_buf);
-	UnlockReleaseBuffer(header_buf);
-
-	/* Cleanup merge sources */
-	for (i = 0; i < (uint32)num_sources; i++)
-		worker_merge_source_close(&sources[i]);
-	pfree(sources);
-
-	/* Free merged terms */
-	for (i = 0; i < num_merged_terms; i++)
-	{
-		if (merged_terms[i].term)
-			pfree(merged_terms[i].term);
-		if (merged_terms[i].buffer_refs)
-			pfree(merged_terms[i].buffer_refs);
-	}
-	if (merged_terms)
-		pfree(merged_terms);
-
-	pfree(term_blocks);
-	pfree(all_skip_entries);
-	pfree(string_offsets);
-	tp_docmap_destroy(docmap);
-	tp_segment_writer_finish(&writer);
-	if (writer.pages)
-		pfree(writer.pages);
-
-	return header_block;
-}
-
-/*
- * Clear a worker buffer's hash tables for reuse.
- * Frees all DSA allocations and creates fresh empty tables.
- */
-static void
-clear_worker_buffer(dsa_area *dsa, TpWorkerMemtableBuffer *buffer)
-{
-	if (buffer->string_hash_handle != DSHASH_HANDLE_INVALID)
-	{
-		dshash_table	  *old_string_table;
-		dshash_table	  *new_string_table;
-		dshash_parameters  string_params;
-		dshash_seq_status  seq_status;
-		TpStringHashEntry *entry;
-
-		string_params.key_size		   = sizeof(TpStringKey);
-		string_params.entry_size	   = sizeof(TpStringHashEntry);
-		string_params.hash_function	   = tp_worker_string_hash;
-		string_params.compare_function = tp_worker_string_compare;
-		string_params.copy_function	   = dshash_memcpy;
-		string_params.tranche_id	   = TP_STRING_HASH_TRANCHE_ID;
-		old_string_table			   = dshash_attach(
-				  dsa, &string_params, buffer->string_hash_handle, dsa);
-
-		/* Free all DSA allocations before destroying hash table */
-		dshash_seq_init(&seq_status, old_string_table, true);
-		while ((entry = (TpStringHashEntry *)dshash_seq_next(&seq_status)) !=
-			   NULL)
-		{
-			/* Free the term string */
-			if (DsaPointerIsValid(entry->key.term.dp))
-				dsa_free(dsa, entry->key.term.dp);
-
-			/* Free posting list and its entries array */
-			tp_free_posting_list(dsa, entry->key.posting_list);
-		}
-		dshash_seq_term(&seq_status);
-
-		dshash_destroy(old_string_table);
-
-		new_string_table		   = tp_worker_create_string_table(dsa);
-		buffer->string_hash_handle = dshash_get_hash_table_handle(
-				new_string_table);
-		dshash_detach(new_string_table);
-	}
-
-	if (buffer->doc_lengths_handle != DSHASH_HANDLE_INVALID)
-	{
-		dshash_table	 *old_doc_table;
-		dshash_table	 *new_doc_table;
-		dshash_parameters doc_params;
-
-		doc_params.key_size			= sizeof(ItemPointerData);
-		doc_params.entry_size		= sizeof(TpDocLengthEntry);
-		doc_params.hash_function	= dshash_memhash;
-		doc_params.compare_function = dshash_memcmp;
-		doc_params.copy_function	= dshash_memcpy;
-		doc_params.tranche_id		= TP_DOCLENGTH_HASH_TRANCHE_ID;
-		old_doc_table				= dshash_attach(
-				  dsa, &doc_params, buffer->doc_lengths_handle, dsa);
-		/* No DSA allocations in doc length entries - just destroy */
-		dshash_destroy(old_doc_table);
-
-		new_doc_table			   = tp_worker_create_doclength_table(dsa);
-		buffer->doc_lengths_handle = dshash_get_hash_table_handle(
-				new_doc_table);
-		dshash_detach(new_doc_table);
-	}
-
-	/* Clear buffer stats */
-	buffer->num_docs	   = 0;
-	buffer->total_len	   = 0;
-	buffer->total_postings = 0;
-}
-
-/*
- * Leader processes worker buffers by directly streaming N-way merge to
- * segment.
- *
- * Architecture:
- * - Workers fill buffer A, signal ready, immediately continue filling buffer B
- * - When B fills, signal ready, re-acquire A (after leader processed it)
- * - Leader waits until enough buffers are ready, then merges them directly to
- *   segment in a streaming fashion (no intermediate copy)
- * - After merge, clears processed buffers so workers can reuse them
- *
- * This produces a single compact segment similar to serial build, without
- * the memory overhead of accumulating all data into a local memtable first.
- */
-static void
-tp_leader_process_buffers(
-		TpParallelBuildShared *shared, Relation index, dsa_area *dsa)
-{
-	TpWorkerState			*worker_states = TpParallelWorkerStates(shared);
-	TpWorkerMemtableBuffer **ready_buffers;
-	int						 num_ready;
-	int						 max_ready;
-	bool					 all_done	= false;
-	uint32					 total_docs = 0;
-	int64					 total_len	= 0;
-
-	/* Allocate array to track ready buffers */
-	max_ready	  = shared->nworkers * 2; /* 2 buffers per worker */
-	ready_buffers = (TpWorkerMemtableBuffer **)palloc(
-			sizeof(TpWorkerMemtableBuffer *) * max_ready);
-
-	for (;;)
-	{
-		int	   i;
-		uint64 tuples_scanned = 0;
-
-		/* Report tuple-level progress from worker counters */
-		for (i = 0; i < shared->nworkers; i++)
-			tuples_scanned += pg_atomic_read_u64(
-					&worker_states[i].tuples_scanned);
-		pgstat_progress_update_param(
-				PROGRESS_CREATEIDX_TUPLES_DONE, tuples_scanned);
-
-		/*
-		 * Check all_done BEFORE collecting buffers to avoid a TOCTOU
-		 * race.  Workers guarantee: buffer marked READY (atomic write)
-		 * then SpinLock acquire/release around workers_done++.  By
-		 * reading workers_done under the same SpinLock first, the
-		 * release/acquire pair ensures that any buffer marked READY
-		 * before the corresponding workers_done increment is visible
-		 * to our subsequent buffer status reads.
-		 *
-		 * Old order (collect, then check) allowed a window where a
-		 * worker marks its final buffer READY and increments
-		 * workers_done between our collection and our check, causing
-		 * the leader to see all_done=true with num_ready=0 and exit
-		 * without processing the final buffer.
-		 */
-		SpinLockAcquire(&shared->mutex);
-		all_done = (shared->workers_done >= shared->nworkers);
-		SpinLockRelease(&shared->mutex);
-
-		/* Collect all currently ready buffers */
-		num_ready = 0;
-		for (i = 0; i < shared->nworkers; i++)
-		{
-			int j;
-			for (j = 0; j < 2; j++)
-			{
-				TpWorkerMemtableBuffer *buffer = &worker_states[i].buffers[j];
-				uint32 status = pg_atomic_read_u32(&buffer->status);
-
-				if (status == TP_BUFFER_READY)
-				{
-					ready_buffers[num_ready++] = buffer;
-				}
-			}
-		}
-
-		/* Exit when all workers are done and no buffers remain */
-		if (all_done && num_ready == 0)
-			break;
-
-		/*
-		 * Merge if we have ready buffers and either:
-		 * - All workers are done (final merge)
-		 * - We have at least nworkers buffers ready (one per
-		 *   worker on average)
-		 *
-		 * This allows the leader to start merging even if some
-		 * workers are lagging - e.g., if one worker has filled
-		 * both buffers while another is slow, we can still make
-		 * progress.
-		 */
-		if (num_ready > 0 && (all_done || num_ready >= shared->nworkers))
-		{
-			BlockNumber	  seg_block;
-			MemoryContext merge_ctx;
-			MemoryContext old_ctx;
-
-			elog(DEBUG1,
-				 "Merging %d ready buffers (all_done=%d)",
-				 num_ready,
-				 all_done);
-
-			/*
-			 * Run each merge cycle in a dedicated memory context.
-			 * This ensures all leader-side palloc's (docmap,
-			 * merged_terms, chunk buffers, skip entries, etc.)
-			 * are truly freed back to the OS when the context is
-			 * deleted, rather than accumulating on the AllocSet
-			 * freelist.
-			 */
-			merge_ctx = AllocSetContextCreate(
-					CurrentMemoryContext,
-					"ParallelBuildMerge",
-					ALLOCSET_DEFAULT_SIZES);
-			old_ctx = MemoryContextSwitchTo(merge_ctx);
-
-			/* Merge ready buffers directly to segment */
-			seg_block = tp_merge_worker_buffers_to_segment(
-					ready_buffers, num_ready, index, dsa);
-
-			MemoryContextSwitchTo(old_ctx);
-			MemoryContextDelete(merge_ctx);
-
-			if (seg_block != InvalidBlockNumber)
-			{
-				/* Accumulate stats from processed buffers */
-				for (i = 0; i < num_ready; i++)
-				{
-					total_docs += ready_buffers[i]->num_docs;
-					total_len += ready_buffers[i]->total_len;
-				}
-
-				/* Link segment into chain */
-				if (shared->segment_head == InvalidBlockNumber)
-				{
-					shared->segment_head = seg_block;
-					shared->segment_tail = seg_block;
-				}
-				else
-				{
-					/* Link new segment to existing chain */
-					Buffer			 tail_buf;
-					Page			 tail_page;
-					TpSegmentHeader *tail_header;
-
-					tail_buf = ReadBuffer(index, shared->segment_tail);
-					LockBuffer(tail_buf, BUFFER_LOCK_EXCLUSIVE);
-					tail_page	= BufferGetPage(tail_buf);
-					tail_header = (TpSegmentHeader *)((char *)tail_page +
-													  SizeOfPageHeaderData);
-					tail_header->next_segment = seg_block;
-					MarkBufferDirty(tail_buf);
-					UnlockReleaseBuffer(tail_buf);
-
-					shared->segment_tail = seg_block;
-				}
-				shared->segment_count++;
-			}
-
-			/* Clear processed buffers and signal workers */
-			for (i = 0; i < num_ready; i++)
-			{
-				TpWorkerMemtableBuffer *buffer = ready_buffers[i];
-
-				clear_worker_buffer(dsa, buffer);
-
-				pg_atomic_write_u32(&buffer->status, TP_BUFFER_EMPTY);
-
-				/* Find the worker that owns this buffer and signal it */
-				{
-					int w;
-					for (w = 0; w < shared->nworkers; w++)
-					{
-						if (&worker_states[w].buffers[0] == buffer ||
-							&worker_states[w].buffers[1] == buffer)
-						{
-							ConditionVariableSignal(
-									&worker_states[w].buffer_consumed_cv);
-							break;
-						}
-					}
-				}
-			}
-
-			/*
-			 * After clearing buffers (which frees DSA pointers),
-			 * trim the DSA to release fully-unused segments back
-			 * to the OS.  Without this, dsa_free() only recycles
-			 * space internally and RSS grows monotonically.
-			 */
-			dsa_trim(dsa);
-		}
-		else
-		{
-			/* No ready buffers and not done - wait for work */
-			ConditionVariableSleep(
-					&shared->leader_wake_cv,
-					WAIT_EVENT_PARALLEL_CREATE_INDEX_SCAN);
-			ConditionVariableCancelSleep();
-		}
-
-		CHECK_FOR_INTERRUPTS();
-	}
-
-	/* Update corpus statistics in shared state */
-	pg_atomic_write_u64(&shared->total_docs, total_docs);
-	pg_atomic_write_u64(&shared->total_len, total_len);
-
-	/* Cleanup */
-	pfree((void *)ready_buffers);
-}
-
-/*
- * Get string and length from key.
- * Lookup keys use explicit len field; stored keys use strlen on DSA string.
- */
-static inline void
-tp_worker_get_key_str_len(
-		const TpStringKey *key,
-		dsa_area		  *dsa,
-		const char		 **str_out,
-		size_t			  *len_out)
-{
-	if (DsaPointerIsValid(key->posting_list))
-	{
-		/* Stored key - string is null-terminated in DSA */
-		*str_out = dsa_get_address(dsa, key->term.dp);
-		*len_out = strlen(*str_out);
-	}
-	else
-	{
-		/* Lookup key - use explicit length (no null termination required) */
-		*str_out = key->term.str;
-		*len_out = key->len;
-	}
-}
-
-static uint32
-tp_worker_string_hash(const void *key, size_t keysize, void *arg)
-{
-	const TpStringKey *skey = (const TpStringKey *)key;
-	dsa_area		  *dsa	= (dsa_area *)arg;
-	const char		  *str;
-	size_t			   len;
-
-	Assert(keysize == sizeof(TpStringKey));
-
-	tp_worker_get_key_str_len(skey, dsa, &str, &len);
-
-	return hash_bytes((const unsigned char *)str, len);
-}
-
-static int
-tp_worker_string_compare(
-		const void *a, const void *b, size_t keysize, void *arg)
-{
-	const TpStringKey *key_a = (const TpStringKey *)a;
-	const TpStringKey *key_b = (const TpStringKey *)b;
-	dsa_area		  *dsa	 = (dsa_area *)arg;
-	const char		  *str_a;
-	const char		  *str_b;
-	size_t			   len_a;
-	size_t			   len_b;
-
-	Assert(keysize == sizeof(TpStringKey));
-
-	tp_worker_get_key_str_len(key_a, dsa, &str_a, &len_a);
-	tp_worker_get_key_str_len(key_b, dsa, &str_b, &len_b);
-
-	/* Compare by length first for efficiency */
-	if (len_a != len_b)
-		return (len_a < len_b) ? -1 : 1;
-
-	/* Same length - compare contents */
-	return memcmp(str_a, str_b, len_a);
-}
-
-/*
- * Create a new string hash table for worker buffer (parallel-safe)
- */
-static dshash_table *
-tp_worker_create_string_table(dsa_area *dsa)
-{
-	dshash_parameters params;
-
-	params.key_size			= sizeof(TpStringKey);
-	params.entry_size		= sizeof(TpStringHashEntry);
-	params.hash_function	= tp_worker_string_hash;
-	params.compare_function = tp_worker_string_compare;
-	params.copy_function	= dshash_memcpy;
-	params.tranche_id		= TP_STRING_HASH_TRANCHE_ID;
-
-	return dshash_create(dsa, &params, dsa);
-}
-
-/*
- * Create a new document length hash table for worker buffer (parallel-safe)
- */
-static dshash_table *
-tp_worker_create_doclength_table(dsa_area *dsa)
-{
-	dshash_parameters params;
-
-	params.key_size			= sizeof(ItemPointerData);
-	params.entry_size		= sizeof(TpDocLengthEntry);
-	params.hash_function	= dshash_memhash;
-	params.compare_function = dshash_memcmp;
-	params.copy_function	= dshash_memcpy;
-	params.tranche_id		= TP_DOCLENGTH_HASH_TRANCHE_ID;
-
-	return dshash_create(dsa, &params, dsa);
-}
-
-/*
- * Process a single document into worker's memtable buffer
- *
- * Creates hash tables on first document, then adds all terms to the
- * buffer's string hash table and stores the document length.
- */
-static void
-tp_worker_process_document(
-		dsa_area			   *dsa,
-		TpWorkerMemtableBuffer *buffer,
-		TupleTableSlot		   *slot,
-		int						attnum,
-		Oid						text_config_oid)
-{
-	bool		  isnull;
-	Datum		  text_datum;
-	text		 *document_text;
-	ItemPointer	  ctid;
-	Datum		  tsvector_datum;
-	TSVector	  tsvector;
-	int32		  doc_length = 0;
-	WordEntry	 *we;
-	int			  i;
-	dshash_table *string_table;
-	dshash_table *doclength_table;
-
-	/* Get text value */
-	text_datum = slot_getattr(slot, attnum, &isnull);
-	if (isnull)
-		return;
-
-	document_text = DatumGetTextP(text_datum);
-	ctid		  = &slot->tts_tid;
-
-	if (!ItemPointerIsValid(ctid))
-		return;
-
-	/* Tokenize document */
-	tsvector_datum = DirectFunctionCall2Coll(
-			to_tsvector_byid,
-			InvalidOid,
-			ObjectIdGetDatum(text_config_oid),
-			PointerGetDatum(document_text));
-	tsvector = DatumGetTSVector(tsvector_datum);
-
-	if (tsvector->size == 0)
-		return;
-
-	we = ARRPTR(tsvector);
-
-	/* Count document length first */
-	for (i = 0; i < tsvector->size; i++)
-	{
-		int32 frequency;
-		if (we[i].haspos)
-			frequency = (int32)POSDATALEN(tsvector, &we[i]);
-		else
-			frequency = 1;
-		doc_length += frequency;
-	}
-
-	/*
-	 * Attach to hash tables for this buffer.
-	 * Hash tables are created by the leader during initialization.
-	 */
-	{
-		dshash_parameters string_params;
-		string_params.key_size		   = sizeof(TpStringKey);
-		string_params.entry_size	   = sizeof(TpStringHashEntry);
-		string_params.hash_function	   = tp_worker_string_hash;
-		string_params.compare_function = tp_worker_string_compare;
-		string_params.copy_function	   = dshash_memcpy;
-		string_params.tranche_id	   = TP_STRING_HASH_TRANCHE_ID;
-		string_table				   = dshash_attach(
-				  dsa, &string_params, buffer->string_hash_handle, dsa);
-	}
-
-	{
-		dshash_parameters doc_params;
-		doc_params.key_size			= sizeof(ItemPointerData);
-		doc_params.entry_size		= sizeof(TpDocLengthEntry);
-		doc_params.hash_function	= dshash_memhash;
-		doc_params.compare_function = dshash_memcmp;
-		doc_params.copy_function	= dshash_memcpy;
-		doc_params.tranche_id		= TP_DOCLENGTH_HASH_TRANCHE_ID;
-		doclength_table				= dshash_attach(
-				dsa, &doc_params, buffer->doc_lengths_handle, dsa);
-	}
-
-	/* Add each term to the string hash table */
-	for (i = 0; i < tsvector->size; i++)
-	{
-		char			  *term_text;
-		size_t			   term_len;
-		int32			   frequency;
-		TpStringHashEntry *entry;
-		TpPostingList	  *posting_list;
-		TpPostingEntry	  *entries;
-		TpStringKey		   lookup_key;
-		bool			   found;
-
-		/* Get term text (NOT null-terminated in TSVector) */
-		term_text = STRPTR(tsvector) + we[i].pos;
-		term_len  = we[i].len;
-
-		/* Get frequency */
-		if (we[i].haspos)
-			frequency = (int32)POSDATALEN(tsvector, &we[i]);
-		else
-			frequency = 1;
-
-		/* Build lookup key with explicit length (no allocation needed) */
-		lookup_key.term.str		= term_text;
-		lookup_key.posting_list = InvalidDsaPointer; /* Indicates lookup key */
-		lookup_key.len			= term_len;
-
-		/* Find or insert term using dshash directly */
-		entry = (TpStringHashEntry *)
-				dshash_find_or_insert(string_table, &lookup_key, &found);
-
-		/* If new entry, allocate DSA string and posting list */
-		if (!found)
-		{
-			dsa_pointer string_dp;
-			char	   *stored_string;
-
-			/* Allocate string in DSA */
-			string_dp = dsa_allocate(dsa, term_len + 1);
-			if (!DsaPointerIsValid(string_dp))
-				elog(ERROR, "Failed to allocate term string in worker");
-			stored_string = dsa_get_address(dsa, string_dp);
-			memcpy(stored_string, term_text, term_len);
-			stored_string[term_len] = '\0';
-
-			/* Convert key from lookup (char*) to storage (dsa_pointer) */
-			entry->key.term.dp		= string_dp;
-			entry->key.posting_list = tp_alloc_posting_list(dsa);
-		}
-
-		posting_list = dsa_get_address(dsa, entry->key.posting_list);
-
-		/* Grow posting list if needed */
-		if (posting_list->doc_count >= posting_list->capacity)
-		{
-			int32		new_capacity;
-			Size		new_size;
-			dsa_pointer new_entries_dp;
-
-			new_capacity = posting_list->capacity == 0
-								 ? 8
-								 : posting_list->capacity * 2;
-			new_size	 = new_capacity * sizeof(TpPostingEntry);
-
-			new_entries_dp = dsa_allocate(dsa, new_size);
-			if (!DsaPointerIsValid(new_entries_dp))
-				elog(ERROR, "Failed to allocate posting entries in worker");
-
-			/* Copy existing entries if any */
-			if (posting_list->doc_count > 0 &&
-				DsaPointerIsValid(posting_list->entries_dp))
-			{
-				TpPostingEntry *old_entries =
-						dsa_get_address(dsa, posting_list->entries_dp);
-				TpPostingEntry *new_entries =
-						dsa_get_address(dsa, new_entries_dp);
-				memcpy(new_entries,
-					   old_entries,
-					   posting_list->doc_count * sizeof(TpPostingEntry));
-				dsa_free(dsa, posting_list->entries_dp);
-			}
-
-			posting_list->entries_dp = new_entries_dp;
-			posting_list->capacity	 = new_capacity;
-		}
-
-		/* Add document to posting list */
-		entries = dsa_get_address(dsa, posting_list->entries_dp);
-		entries[posting_list->doc_count].ctid	   = *ctid;
-		entries[posting_list->doc_count].frequency = frequency;
-		posting_list->doc_count++;
-		posting_list->doc_freq = posting_list->doc_count;
-
-		/* Track total postings for spill threshold */
-		buffer->total_postings++;
-
-		/* Release lock on string entry */
-		dshash_release_lock(string_table, entry);
-	}
-
-	/* Store document length */
-	{
-		TpDocLengthEntry *doc_entry;
-		bool			  found;
-
-		doc_entry		= dshash_find_or_insert(doclength_table, ctid, &found);
-		doc_entry->ctid = *ctid;
-		doc_entry->doc_length = doc_length;
-		dshash_release_lock(doclength_table, doc_entry);
-	}
-
-	/* Detach from hash tables */
-	dshash_detach(string_table);
-	dshash_detach(doclength_table);
-
-	/* Update statistics */
-	buffer->num_docs++;
-	buffer->total_len += doc_length;
-}
-
-/*
- * Comparison function for sorting terms
- */
-static int
-worker_term_info_cmp(const void *a, const void *b)
-{
-	const TermInfo *ta = (const TermInfo *)a;
-	const TermInfo *tb = (const TermInfo *)b;
-	return strcmp(ta->term, tb->term);
-}
-
-/*
- * Build sorted dictionary from worker buffer's string hash table
- */
-static TermInfo *
-build_dictionary_from_worker_buffer(
-		dsa_area *dsa, TpWorkerMemtableBuffer *buffer, uint32 *num_terms)
-{
-	dshash_table	  *string_table;
-	dshash_seq_status  status;
-	TpStringHashEntry *entry;
-	TermInfo		  *terms;
-	uint32			   count	= 0;
-	uint32			   capacity = 1024;
-	dshash_parameters  params;
-
-	if (buffer->string_hash_handle == DSHASH_HANDLE_INVALID)
-	{
-		*num_terms = 0;
-		return NULL;
-	}
-
-	/* Attach to string hash table using parallel-safe parameters */
-	params.key_size			= sizeof(TpStringKey);
-	params.entry_size		= sizeof(TpStringHashEntry);
-	params.hash_function	= tp_worker_string_hash;
-	params.compare_function = tp_worker_string_compare;
-	params.copy_function	= dshash_memcpy;
-	params.tranche_id		= TP_STRING_HASH_TRANCHE_ID;
-	string_table =
-			dshash_attach(dsa, &params, buffer->string_hash_handle, dsa);
-
-	/* Allocate initial array */
-	terms = palloc(sizeof(TermInfo) * capacity);
-
-	/* Iterate through all terms in string table */
-	dshash_seq_init(&status, string_table, false);
-
-	while ((entry = (TpStringHashEntry *)dshash_seq_next(&status)) != NULL)
-	{
-		const char *term = tp_get_key_str(dsa, &entry->key);
-
-		if (!term)
-			continue;
-
-		/* Resize if needed */
-		if (count >= capacity)
-		{
-			capacity *= 2;
-			terms = repalloc(terms, sizeof(TermInfo) * capacity);
-		}
-
-		/* Store term info */
-		terms[count].term			 = pstrdup(term);
-		terms[count].term_len		 = strlen(term);
-		terms[count].posting_list_dp = entry->key.posting_list;
-		terms[count].dict_entry_idx	 = count;
-		count++;
-	}
-
-	dshash_seq_term(&status);
-	dshash_detach(string_table);
-
-	/* Sort terms lexicographically */
-	qsort(terms, count, sizeof(TermInfo), worker_term_info_cmp);
-
-	*num_terms = count;
-	return terms;
 }

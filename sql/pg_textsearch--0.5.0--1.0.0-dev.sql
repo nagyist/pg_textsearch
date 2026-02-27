@@ -19,6 +19,12 @@ BEGIN
     END IF;
 END $$;
 
+-- New function: force-merge all segments into one
+CREATE FUNCTION bm25_force_merge(index_name text)
+RETURNS void
+AS 'MODULE_PATHNAME', 'tp_force_merge'
+LANGUAGE C VOLATILE STRICT;
+
 DO $$
 BEGIN
     RAISE WARNING 'pg_textsearch v1.0.0-dev is a prerelease. Do not use in production.';

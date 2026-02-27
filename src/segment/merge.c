@@ -18,84 +18,146 @@
 #include "docmap.h"
 #include "fieldnorm.h"
 #include "merge.h"
+#include "merge_internal.h"
 #include "pagemapper.h"
 #include "segment.h"
+#include "segment_io.h"
 #include "state/metapage.h"
 
 /* GUC variable for segment compression */
 extern bool tp_compress_segments;
 
 /*
- * Merge source state - tracks current position in each source segment
- * Updated for segment format.
+ * Types TpMergeSource, TpTermSegmentRef, TpMergedTerm,
+ * TpMergePostingInfo, TpPostingMergeSource, TpMergeDocMapping,
+ * and MergeTermBlockInfo are defined in merge_internal.h.
  */
-typedef struct TpMergeSource
-{
-	TpSegmentReader *reader;		 /* Segment reader */
-	uint32			 current_idx;	 /* Current term index in dictionary */
-	uint32			 num_terms;		 /* Total terms in this segment */
-	char			*current_term;	 /* Current term text (palloc'd) */
-	TpDictEntry		 current_entry;	 /* dictionary entry */
-	bool			 exhausted;		 /* True if no more terms */
-	uint32			*string_offsets; /* Cached string offsets array */
-} TpMergeSource;
+
+/* ----------------------------------------------------------------
+ * Merge sink: unified I/O abstraction
+ * ----------------------------------------------------------------
+ */
 
 /*
- * Reference to a segment that contains a particular term.
- * Used to avoid loading all postings into memory during merge.
+ * Seek to an absolute position in a BufFile and write data.
  */
-typedef struct TpTermSegmentRef
+static void
+buffile_write_at(BufFile *file, uint64 abs_pos, const void *data, size_t size)
 {
-	int			segment_idx; /* Index into sources array */
-	TpDictEntry entry;		 /* dict entry from that segment */
-} TpTermSegmentRef;
+	int	  fileno;
+	off_t offset;
+
+	tp_buffile_decompose_offset(abs_pos, &fileno, &offset);
+	BufFileSeek(file, fileno, offset, SEEK_SET);
+	BufFileWrite(file, data, size);
+}
+
+void
+merge_sink_init_pages(TpMergeSink *sink, Relation index)
+{
+	memset(sink, 0, sizeof(TpMergeSink));
+	sink->is_buffile = false;
+	sink->index		 = index;
+	tp_segment_writer_init(&sink->writer, index);
+	sink->current_offset = sink->writer.current_offset;
+}
+
+void
+merge_sink_init_pages_parallel(
+		TpMergeSink *sink, Relation index, pg_atomic_uint64 *page_counter)
+{
+	memset(sink, 0, sizeof(TpMergeSink));
+	sink->is_buffile = false;
+	sink->index		 = index;
+	tp_segment_writer_init_parallel(&sink->writer, index, page_counter);
+	sink->current_offset = sink->writer.current_offset;
+}
+
+void
+merge_sink_init_buffile(TpMergeSink *sink, BufFile *file)
+{
+	int	  fileno;
+	off_t file_offset;
+
+	memset(sink, 0, sizeof(TpMergeSink));
+	sink->is_buffile = true;
+	sink->file		 = file;
+
+	BufFileTell(file, &fileno, &file_offset);
+	sink->base_abs		 = tp_buffile_composite_offset(fileno, file_offset);
+	sink->current_offset = 0;
+}
 
 /*
- * Merged term info - tracks which segments have this term.
- * Postings are streamed during write, not buffered in memory.
+ * Sequential append to sink.
  */
-typedef struct TpMergedTerm
+static void
+merge_sink_write(TpMergeSink *sink, const void *data, uint32 size)
 {
-	char			 *term;				/* Term text */
-	uint32			  term_len;			/* Term length */
-	TpTermSegmentRef *segment_refs;		/* Which segments have this term */
-	uint32			  num_segment_refs; /* Number of segment refs */
-	uint32			  segment_refs_capacity; /* Allocated capacity */
-	/* Filled during posting write pass: */
-	uint64 posting_offset; /* Absolute offset where postings start */
-	uint32 posting_count;  /* Number of postings written */
-} TpMergedTerm;
+	if (!sink->is_buffile)
+	{
+		tp_segment_writer_write(&sink->writer, data, size);
+		sink->current_offset = sink->writer.current_offset;
+	}
+	else
+	{
+		buffile_write_at(
+				sink->file, sink->base_abs + sink->current_offset, data, size);
+		sink->current_offset += size;
+	}
+}
 
 /*
- * Current posting info during merge (for N-way merge comparison).
+ * Positioned write for backpatching (dict entries, header).
+ * For pages backend, reads/writes through buffer manager.
  */
-typedef struct TpMergePostingInfo
+static void
+merge_sink_write_at(
+		TpMergeSink *sink, uint64 offset, const void *data, uint32 size)
 {
-	ItemPointerData ctid;		/* CTID for comparison ordering */
-	uint32			old_doc_id; /* Doc ID in source segment */
-	uint16			frequency;	/* Term frequency */
-	uint8			fieldnorm;	/* Encoded fieldnorm (1 byte) */
-} TpMergePostingInfo;
+	if (sink->is_buffile)
+	{
+		buffile_write_at(sink->file, sink->base_abs + offset, data, size);
+		return;
+	}
 
-/*
- * Posting merge source - tracks position in one segment's posting list
- * for streaming N-way merge. Updated for block-based format.
+	/* Pages backend: loop over logical pages */
+	{
+		const char *src		  = (const char *)data;
+		uint32		remaining = size;
+		uint64		pos		  = offset;
+
+		while (remaining > 0)
+		{
+			uint32		logical_pg = tp_logical_page(pos);
+			uint32		pg_off	   = tp_page_offset(pos);
+			uint32		avail	   = SEGMENT_DATA_PER_PAGE - pg_off;
+			uint32		chunk	   = Min(remaining, avail);
+			BlockNumber physical_block;
+			Buffer		buf;
+			Page		page;
+
+			Assert(logical_pg < sink->writer.pages_allocated);
+			physical_block = sink->writer.pages[logical_pg];
+
+			buf = ReadBuffer(sink->index, physical_block);
+			LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
+			page = BufferGetPage(buf);
+			memcpy((char *)page + SizeOfPageHeaderData + pg_off, src, chunk);
+			MarkBufferDirty(buf);
+			UnlockReleaseBuffer(buf);
+
+			src += chunk;
+			pos += chunk;
+			remaining -= chunk;
+		}
+	}
+}
+
+/* ----------------------------------------------------------------
+ * Merge source operations
+ * ----------------------------------------------------------------
  */
-typedef struct TpPostingMergeSource
-{
-	TpSegmentReader	  *reader;	  /* Segment reader */
-	TpMergePostingInfo current;	  /* Current posting info */
-	bool			   exhausted; /* No more postings */
-
-	/* block iteration state */
-	uint64			skip_index_offset; /* Offset to skip entries */
-	uint16			block_count;	   /* Total blocks */
-	uint32			current_block;	   /* Current block index */
-	uint32			current_in_block;  /* Position within current block */
-	TpSkipEntry		skip_entry;		   /* Current block's skip entry */
-	TpBlockPosting *block_postings;	   /* Cached postings for current block */
-	uint32			block_capacity;	   /* Allocated size of block_postings */
-} TpPostingMergeSource;
 
 /*
  * Read term at index from a segment's dictionary.
@@ -127,7 +189,7 @@ merge_read_term_at_index(TpMergeSource *source, uint32 index)
  * Advance a merge source to its next term.
  * Returns false if source is exhausted.
  */
-static bool
+bool
 merge_source_advance(TpMergeSource *source)
 {
 	TpSegmentHeader *header;
@@ -170,7 +232,7 @@ merge_source_advance(TpMergeSource *source)
  * Initialize a merge source for a segment.
  * Returns false if segment is empty or invalid.
  */
-static bool
+bool
 merge_source_init(TpMergeSource *source, Relation index, BlockNumber root)
 {
 	TpSegmentHeader *header;
@@ -228,9 +290,66 @@ merge_source_init(TpMergeSource *source, Relation index, BlockNumber root)
 }
 
 /*
+ * Initialize a merge source from a pre-opened reader.
+ * Same as merge_source_init but takes a TpSegmentReader directly.
+ * Does NOT close the reader on failure (caller owns it).
+ */
+bool
+merge_source_init_from_reader(TpMergeSource *source, TpSegmentReader *reader)
+{
+	TpSegmentHeader *header;
+	TpDictionary	 dict_header;
+
+	memset(source, 0, sizeof(TpMergeSource));
+	source->exhausted = true; /* Assume failure */
+
+	if (!reader)
+		return false;
+
+	source->reader = reader;
+	header		   = reader->header;
+
+	if (header->num_terms == 0)
+		return false;
+
+	source->num_terms = header->num_terms;
+
+	/* Read dictionary header */
+	tp_segment_read(
+			source->reader,
+			header->dictionary_offset,
+			&dict_header,
+			sizeof(dict_header.num_terms));
+
+	/* Cache all string offsets for this segment */
+	source->string_offsets = palloc(sizeof(uint32) * source->num_terms);
+	tp_segment_read(
+			source->reader,
+			header->dictionary_offset + sizeof(dict_header.num_terms),
+			source->string_offsets,
+			sizeof(uint32) * source->num_terms);
+
+	/* Position before first term */
+	source->current_idx	 = UINT32_MAX;
+	source->exhausted	 = false;
+	source->current_term = NULL;
+
+	/* Advance to first term */
+	if (!merge_source_advance(source))
+	{
+		pfree(source->string_offsets);
+		source->string_offsets = NULL;
+		source->reader		   = NULL; /* Don't close, caller owns it */
+		return false;
+	}
+
+	return true;
+}
+
+/*
  * Close and cleanup a merge source.
  */
-static void
+void
 merge_source_close(TpMergeSource *source)
 {
 	if (source->current_term)
@@ -254,7 +373,7 @@ merge_source_close(TpMergeSource *source)
  * Find the source with the lexicographically smallest current term.
  * Returns -1 if all sources are exhausted.
  */
-static int
+int
 merge_find_min_source(TpMergeSource *sources, int num_sources)
 {
 	int			min_idx	 = -1;
@@ -280,7 +399,7 @@ merge_find_min_source(TpMergeSource *sources, int num_sources)
  * Add a segment reference to a merged term.
  * This records which segment has this term, without loading postings.
  */
-static void
+void
 merged_term_add_segment_ref(
 		TpMergedTerm *term, int segment_idx, TpDictEntry *entry)
 {
@@ -418,7 +537,7 @@ posting_source_convert_current(TpPostingMergeSource *ps)
 /*
  * Initialize a posting merge source for streaming.
  */
-static void
+void
 posting_source_init(
 		TpPostingMergeSource *ps, TpSegmentReader *reader, TpDictEntry *entry)
 {
@@ -446,9 +565,34 @@ posting_source_init(
 }
 
 /*
+ * Initialize a posting merge source for fast streaming (disjoint mode).
+ * Skips posting_source_convert_current since CTID lookups are not needed.
+ */
+void
+posting_source_init_fast(
+		TpPostingMergeSource *ps, TpSegmentReader *reader, TpDictEntry *entry)
+{
+	memset(ps, 0, sizeof(TpPostingMergeSource));
+	ps->reader			  = reader;
+	ps->skip_index_offset = entry->skip_index_offset;
+	ps->block_count		  = entry->block_count;
+	ps->current_block	  = 0;
+	ps->current_in_block  = 0;
+	ps->block_postings	  = NULL;
+	ps->block_capacity	  = 0;
+	ps->exhausted		  = (entry->block_count == 0);
+
+	if (!ps->exhausted)
+	{
+		if (!posting_source_load_block(ps))
+			ps->exhausted = true;
+	}
+}
+
+/*
  * Free posting merge source resources.
  */
-static void
+void
 posting_source_free(TpPostingMergeSource *ps)
 {
 	if (ps->block_postings)
@@ -461,7 +605,7 @@ posting_source_free(TpPostingMergeSource *ps)
 /*
  * Advance a posting merge source to the next posting.
  */
-static bool
+bool
 posting_source_advance(TpPostingMergeSource *ps)
 {
 	if (ps->exhausted)
@@ -490,10 +634,42 @@ posting_source_advance(TpPostingMergeSource *ps)
 }
 
 /*
+ * Advance a posting merge source without CTID conversion (disjoint mode).
+ * Reads doc_id, frequency, fieldnorm directly from the block posting
+ * array, skipping the expensive CTID lookups in convert_current.
+ */
+bool
+posting_source_advance_fast(TpPostingMergeSource *ps)
+{
+	if (ps->exhausted)
+		return false;
+
+	ps->current_in_block++;
+
+	/* Move to next block if current exhausted */
+	while (ps->current_in_block >= ps->skip_entry.doc_count)
+	{
+		ps->current_block++;
+		if (ps->current_block >= ps->block_count)
+		{
+			ps->exhausted = true;
+			return false;
+		}
+		if (!posting_source_load_block(ps))
+		{
+			ps->exhausted = true;
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/*
  * Find the posting source with the smallest current CTID.
  * Returns -1 if all sources are exhausted.
  */
-static int
+int
 find_min_posting_source(TpPostingMergeSource *sources, int num_sources)
 {
 	int				min_idx = -1;
@@ -520,145 +696,218 @@ find_min_posting_source(TpPostingMergeSource *sources, int num_sources)
 	return min_idx;
 }
 
-/*
- * Mapping from (source_idx, old_doc_id) → new_doc_id.
- * Avoids hash lookups during posting write phase.
- */
-typedef struct TpMergeDocMapping
-{
-	uint32 **old_to_new; /* old_to_new[src_idx][old_doc_id] = new_doc_id */
-	int		 num_sources;
-} TpMergeDocMapping;
+/* TpMergeDocMapping is defined in merge_internal.h */
 
 /*
- * Build merged docmap from source segment CTID arrays.
- * Also builds direct mapping arrays for fast old→new doc_id lookup.
- *
- * IMPORTANT: The mapping is built AFTER finalize because finalize
- * reassigns doc_ids in CTID order (the docmap invariant).
+ * Per-source state for the streaming N-way merge of docmaps.
  */
-static TpDocMapBuilder *
-build_merged_docmap(
-		TpMergeSource *sources, int num_sources, TpMergeDocMapping *mapping)
+typedef struct TpDocmapMergeSource
 {
-	TpDocMapBuilder *docmap = tp_docmap_create();
-	int				 i;
+	BlockNumber	 *ctid_pages;	/* CTID page numbers (4 bytes/doc) */
+	OffsetNumber *ctid_offsets; /* CTID tuple offsets (2 bytes/doc) */
+	uint8		 *fieldnorms;	/* Encoded fieldnorms (1 byte/doc) */
+	uint32		  num_docs;		/* Total docs in this source */
+	uint32		  cursor;		/* Current position in arrays */
+	bool		  owns_arrays;	/* True if we allocated the arrays */
+} TpDocmapMergeSource;
+
+/*
+ * Build merged docmap using streaming N-way merge of sorted CTID arrays.
+ * Also builds direct mapping arrays for fast old->new doc_id lookup.
+ *
+ * Each source segment maintains the invariant that doc_ids are in CTID
+ * order. An N-way merge of these sorted streams produces the global
+ * CTID order without needing a hash table, reducing memory from ~5.5GB
+ * to ~2.5GB for 138M documents across 24 segments.
+ */
+TpDocMapBuilder *
+build_merged_docmap(
+		TpMergeSource	  *sources,
+		int				   num_sources,
+		TpMergeDocMapping *mapping,
+		bool			   disjoint_sources)
+{
+	TpDocMapBuilder		*docmap;
+	TpDocmapMergeSource *msources;
+	uint32				 total_docs = 0;
+	BlockNumber			*out_pages;
+	OffsetNumber		*out_offsets;
+	uint8				*out_fieldnorms;
+	uint32				 new_doc_id = 0;
+	int					 i;
 
 	/* Initialize mapping arrays */
 	mapping->num_sources = num_sources;
 	mapping->old_to_new	 = (uint32 **)palloc0(num_sources * sizeof(uint32 *));
 
-	/* First pass: add all documents to docmap (doc_ids are temporary) */
+	/*
+	 * Step 1: Load source CTID and fieldnorm arrays.
+	 * Reuse the reader's cached arrays when available to avoid
+	 * redundant copies.
+	 */
+	msources = palloc0(num_sources * sizeof(TpDocmapMergeSource));
 	for (i = 0; i < num_sources; i++)
 	{
-		TpSegmentHeader *header = sources[i].reader->header;
-		uint32			 num_docs;
-		uint32			 j;
+		TpSegmentHeader		*header = sources[i].reader->header;
+		TpDocmapMergeSource *ms		= &msources[i];
 
-		if (header->ctid_pages_offset == 0)
-			continue;
+		ms->num_docs = header->num_docs;
+		ms->cursor	 = 0;
 
-		num_docs = header->num_docs;
-
-		/* Allocate mapping array for this source */
-		mapping->old_to_new[i] = palloc(num_docs * sizeof(uint32));
-
-		for (j = 0; j < num_docs; j++)
+		if (ms->num_docs == 0 || header->ctid_pages_offset == 0)
 		{
-			ItemPointerData ctid;
-			BlockNumber		page;
-			OffsetNumber	offset;
-			uint8			fieldnorm;
-			uint32			doc_length;
+			ms->num_docs = 0; /* Exclude from N-way merge */
+			continue;
+		}
 
-			/*
-			 * Read CTID from split arrays.
-			 * Use cached arrays if available.
-			 */
-			if (sources[i].reader->cached_ctid_pages != NULL)
-			{
-				page   = sources[i].reader->cached_ctid_pages[j];
-				offset = sources[i].reader->cached_ctid_offsets[j];
-			}
-			else
-			{
-				tp_segment_read(
-						sources[i].reader,
-						header->ctid_pages_offset + (j * sizeof(BlockNumber)),
-						&page,
-						sizeof(BlockNumber));
-				tp_segment_read(
-						sources[i].reader,
-						header->ctid_offsets_offset +
-								(j * sizeof(OffsetNumber)),
-						&offset,
-						sizeof(OffsetNumber));
-			}
-			ItemPointerSet(&ctid, page, offset);
+		total_docs += ms->num_docs;
+		mapping->old_to_new[i] = palloc(ms->num_docs * sizeof(uint32));
 
-			/* Read fieldnorm to get doc length */
+		/* CTID arrays: use cached if available, else bulk-read */
+		if (sources[i].reader->cached_ctid_pages != NULL)
+		{
+			ms->ctid_pages	 = sources[i].reader->cached_ctid_pages;
+			ms->ctid_offsets = sources[i].reader->cached_ctid_offsets;
+			ms->owns_arrays	 = false;
+		}
+		else
+		{
+			ms->ctid_pages = palloc(ms->num_docs * sizeof(BlockNumber));
 			tp_segment_read(
 					sources[i].reader,
-					header->fieldnorm_offset + j,
-					&fieldnorm,
-					sizeof(uint8));
-			doc_length = decode_fieldnorm(fieldnorm);
+					header->ctid_pages_offset,
+					ms->ctid_pages,
+					ms->num_docs * sizeof(BlockNumber));
 
-			/* Add to merged docmap (doc_id assigned here is temporary) */
-			tp_docmap_add(docmap, &ctid, doc_length);
+			ms->ctid_offsets = palloc(ms->num_docs * sizeof(OffsetNumber));
+			tp_segment_read(
+					sources[i].reader,
+					header->ctid_offsets_offset,
+					ms->ctid_offsets,
+					ms->num_docs * sizeof(OffsetNumber));
+			ms->owns_arrays = true;
 		}
+
+		/* Fieldnorms: always bulk-read (not cached by reader) */
+		ms->fieldnorms = palloc(ms->num_docs * sizeof(uint8));
+		tp_segment_read(
+				sources[i].reader,
+				header->fieldnorm_offset,
+				ms->fieldnorms,
+				ms->num_docs * sizeof(uint8));
 	}
 
-	/* Finalize: reassigns doc_ids in CTID order */
-	tp_docmap_finalize(docmap);
+	/* Step 2: Allocate output arrays */
+	if (total_docs > 0)
+	{
+		out_pages	   = palloc(total_docs * sizeof(BlockNumber));
+		out_offsets	   = palloc(total_docs * sizeof(OffsetNumber));
+		out_fieldnorms = palloc(total_docs * sizeof(uint8));
+	}
+	else
+	{
+		out_pages	   = NULL;
+		out_offsets	   = NULL;
+		out_fieldnorms = NULL;
+	}
 
 	/*
-	 * Second pass: build old→new mapping using finalized doc_ids.
-	 * After finalize, tp_docmap_lookup returns the correct CTID-sorted doc_id.
+	 * Step 3: Merge docmaps.
+	 *
+	 * When disjoint_sources is true, sources have non-overlapping
+	 * CTID ranges in source order, so we concatenate sequentially
+	 * instead of doing an N-way comparison. This eliminates the
+	 * per-doc CTID comparison overhead.
 	 */
-	for (i = 0; i < num_sources; i++)
+	if (disjoint_sources)
 	{
-		TpSegmentHeader *header = sources[i].reader->header;
-		uint32			 num_docs;
-		uint32			 j;
-
-		if (header->ctid_pages_offset == 0 || mapping->old_to_new[i] == NULL)
-			continue;
-
-		num_docs = header->num_docs;
-
-		for (j = 0; j < num_docs; j++)
+		for (i = 0; i < num_sources; i++)
 		{
-			ItemPointerData ctid;
-			BlockNumber		page;
-			OffsetNumber	offset;
+			TpDocmapMergeSource *ms = &msources[i];
+			uint32				 j;
 
-			/* Reconstruct CTID for lookup */
-			if (sources[i].reader->cached_ctid_pages != NULL)
+			for (j = 0; j < ms->num_docs; j++)
 			{
-				page   = sources[i].reader->cached_ctid_pages[j];
-				offset = sources[i].reader->cached_ctid_offsets[j];
+				mapping->old_to_new[i][j]  = new_doc_id;
+				out_pages[new_doc_id]	   = ms->ctid_pages[j];
+				out_offsets[new_doc_id]	   = ms->ctid_offsets[j];
+				out_fieldnorms[new_doc_id] = ms->fieldnorms[j];
+				new_doc_id++;
 			}
-			else
-			{
-				tp_segment_read(
-						sources[i].reader,
-						header->ctid_pages_offset + (j * sizeof(BlockNumber)),
-						&page,
-						sizeof(BlockNumber));
-				tp_segment_read(
-						sources[i].reader,
-						header->ctid_offsets_offset +
-								(j * sizeof(OffsetNumber)),
-						&offset,
-						sizeof(OffsetNumber));
-			}
-			ItemPointerSet(&ctid, page, offset);
-
-			/* Look up the finalized doc_id */
-			mapping->old_to_new[i][j] = tp_docmap_lookup(docmap, &ctid);
 		}
 	}
+	else
+	{
+		/*
+		 * N-way merge: each source's docs are already in CTID
+		 * order. Find the source with smallest current CTID via
+		 * linear scan (N is small, typically <= 24).
+		 */
+		while (new_doc_id < total_docs)
+		{
+			int			 min_src = -1;
+			BlockNumber	 min_page;
+			OffsetNumber min_offset;
+
+			for (i = 0; i < num_sources; i++)
+			{
+				TpDocmapMergeSource *ms = &msources[i];
+				BlockNumber			 pg;
+				OffsetNumber		 off;
+
+				if (ms->cursor >= ms->num_docs)
+					continue;
+
+				pg	= ms->ctid_pages[ms->cursor];
+				off = ms->ctid_offsets[ms->cursor];
+
+				if (min_src < 0 || pg < min_page ||
+					(pg == min_page && off < min_offset))
+				{
+					min_src	   = i;
+					min_page   = pg;
+					min_offset = off;
+				}
+			}
+
+			Assert(min_src >= 0);
+
+			{
+				TpDocmapMergeSource *ms	 = &msources[min_src];
+				uint32				 pos = ms->cursor;
+
+				mapping->old_to_new[min_src][pos] = new_doc_id;
+				out_pages[new_doc_id]			  = ms->ctid_pages[pos];
+				out_offsets[new_doc_id]			  = ms->ctid_offsets[pos];
+				out_fieldnorms[new_doc_id]		  = ms->fieldnorms[pos];
+				ms->cursor++;
+			}
+			new_doc_id++;
+		}
+	}
+
+	/* Step 4: Package into a TpDocMapBuilder (finalized, no hash table) */
+	docmap				 = palloc0(sizeof(TpDocMapBuilder));
+	docmap->ctid_to_id	 = NULL; /* No hash table needed */
+	docmap->num_docs	 = total_docs;
+	docmap->capacity	 = total_docs;
+	docmap->finalized	 = true;
+	docmap->ctid_pages	 = out_pages;
+	docmap->ctid_offsets = out_offsets;
+	docmap->fieldnorms	 = out_fieldnorms;
+
+	/* Free per-source arrays we allocated */
+	for (i = 0; i < num_sources; i++)
+	{
+		if (msources[i].owns_arrays)
+		{
+			pfree(msources[i].ctid_pages);
+			pfree(msources[i].ctid_offsets);
+		}
+		if (msources[i].fieldnorms)
+			pfree(msources[i].fieldnorms);
+	}
+	pfree(msources);
 
 	return docmap;
 }
@@ -666,7 +915,7 @@ build_merged_docmap(
 /*
  * Free merge doc mapping arrays.
  */
-static void
+void
 free_merge_doc_mapping(TpMergeDocMapping *mapping)
 {
 	int i;
@@ -683,7 +932,7 @@ free_merge_doc_mapping(TpMergeDocMapping *mapping)
  * Initialize N-way merge posting sources for a term.
  * Returns the number of sources initialized.
  */
-static TpPostingMergeSource *
+TpPostingMergeSource *
 init_term_posting_sources(
 		TpMergedTerm *term, TpMergeSource *sources, int *num_psources)
 {
@@ -705,6 +954,30 @@ init_term_posting_sources(
 }
 
 /*
+ * Initialize posting sources in fast/disjoint mode (no CTID conversion).
+ */
+TpPostingMergeSource *
+init_term_posting_sources_fast(
+		TpMergedTerm *term, TpMergeSource *sources, int *num_psources)
+{
+	TpPostingMergeSource *psources;
+	uint32				  i;
+
+	*num_psources = term->num_segment_refs;
+	psources = palloc(sizeof(TpPostingMergeSource) * term->num_segment_refs);
+
+	for (i = 0; i < term->num_segment_refs; i++)
+	{
+		TpTermSegmentRef *ref	 = &term->segment_refs[i];
+		TpMergeSource	 *source = &sources[ref->segment_idx];
+
+		posting_source_init_fast(&psources[i], source->reader, &ref->entry);
+	}
+
+	return psources;
+}
+
+/*
  * Free N-way merge posting sources for a term.
  */
 static void
@@ -717,40 +990,35 @@ free_term_posting_sources(TpPostingMergeSource *psources, int num_psources)
 	pfree(psources);
 }
 
-/*
- * Per-term block info for merge output.
- * Updated for streaming format: postings written before skip index.
+/* MergeTermBlockInfo is defined in merge_internal.h */
+
+/* ----------------------------------------------------------------
+ * Unified merged segment writer
+ * ----------------------------------------------------------------
  */
-typedef struct MergeTermBlockInfo
-{
-	uint64 posting_offset;	 /* Absolute offset where postings were written */
-	uint16 block_count;		 /* Number of blocks for this term */
-	uint32 doc_freq;		 /* Document frequency */
-	uint32 skip_entry_start; /* Index into accumulated skip entries array */
-} MergeTermBlockInfo;
 
 /*
- * Write a merged segment in streaming format.
+ * Write a merged segment to a sink (pages or BufFile).
  *
- * Layout: [header] → [dictionary] → [postings] → [skip index] →
- *         [fieldnorm] → [ctid map]
+ * Layout: [header] -> [dictionary] -> [postings] -> [skip index] ->
+ *         [fieldnorm] -> [ctid map]
  *
- * This enables streaming writes: postings are written before skip index,
- * so we can stream per-term without loading all postings into memory.
- * Skip entries are accumulated in memory (small: 16 bytes × total blocks)
- * and written after all postings.
+ * For pages sink: also writes page index and backpatches header with
+ * num_pages/page_index. Caller reads sink->writer.pages[0] for root.
+ *
+ * For BufFile sink: caller reads sink->current_offset for data_size.
  */
-static BlockNumber
-write_merged_segment(
-		Relation	   index,
+void
+write_merged_segment_to_sink(
+		TpMergeSink	  *sink,
 		TpMergedTerm  *terms,
 		uint32		   num_terms,
 		TpMergeSource *sources,
 		int			   num_sources,
 		uint32		   target_level,
-		uint64		   total_tokens)
+		uint64		   total_tokens,
+		bool		   disjoint_sources)
 {
-	TpSegmentWriter		writer;
 	TpSegmentHeader		header;
 	TpDictionary		dict;
 	TpDocMapBuilder	   *docmap;
@@ -759,11 +1027,6 @@ write_merged_segment(
 	uint32			   *string_offsets;
 	uint32				string_pos;
 	uint32				i;
-	BlockNumber			header_block;
-	BlockNumber			page_index_root;
-	Buffer				header_buf;
-	Page				header_page;
-	TpSegmentHeader	   *existing_header;
 
 	/* Accumulated skip entries for all terms */
 	TpSkipEntry *all_skip_entries;
@@ -771,15 +1034,25 @@ write_merged_segment(
 	uint32		 skip_entries_capacity;
 
 	if (num_terms == 0)
-		return InvalidBlockNumber;
+		return;
 
 	/* Build docmap and direct mapping arrays from source segments */
-	docmap = build_merged_docmap(sources, num_sources, &doc_mapping);
+	docmap = build_merged_docmap(
+			sources, num_sources, &doc_mapping, disjoint_sources);
 
-	/* Initialize writer */
-	memset(&writer, 0, sizeof(TpSegmentWriter));
-	tp_segment_writer_init(&writer, index);
-	header_block = writer.pages[0];
+	/*
+	 * For BufFile sink, docmap reads may have moved the cursor.
+	 * Re-seek to our recorded base position.
+	 */
+	if (sink->is_buffile)
+	{
+		int	  fileno;
+		off_t offset;
+
+		tp_buffile_decompose_offset(sink->base_abs, &fileno, &offset);
+		BufFileSeek(sink->file, fileno, offset, SEEK_SET);
+		sink->current_offset = 0;
+	}
 
 	/* Prepare header placeholder */
 	memset(&header, 0, sizeof(TpSegmentHeader));
@@ -792,18 +1065,18 @@ write_merged_segment(
 	header.next_segment = InvalidBlockNumber;
 	header.num_docs		= docmap->num_docs;
 	header.total_tokens = total_tokens;
+	header.page_index	= InvalidBlockNumber;
 
 	/* Write placeholder header */
-	tp_segment_writer_write(&writer, &header, sizeof(TpSegmentHeader));
+	merge_sink_write(sink, &header, sizeof(TpSegmentHeader));
 
 	/* Dictionary immediately follows header */
-	header.dictionary_offset = writer.current_offset;
+	header.dictionary_offset = sink->current_offset;
 
 	/* Write dictionary header */
 	memset(&dict, 0, sizeof(dict));
 	dict.num_terms = num_terms;
-	tp_segment_writer_write(
-			&writer, &dict, offsetof(TpDictionary, string_offsets));
+	merge_sink_write(sink, &dict, offsetof(TpDictionary, string_offsets));
 
 	/* Calculate string offsets */
 	string_offsets = palloc0(num_terms * sizeof(uint32));
@@ -815,35 +1088,33 @@ write_merged_segment(
 	}
 
 	/* Write string offsets array */
-	tp_segment_writer_write(
-			&writer, string_offsets, num_terms * sizeof(uint32));
+	merge_sink_write(sink, string_offsets, num_terms * sizeof(uint32));
 
 	/* Write string pool */
-	header.strings_offset = writer.current_offset;
+	header.strings_offset = sink->current_offset;
 	for (i = 0; i < num_terms; i++)
 	{
 		uint32 length	   = terms[i].term_len;
 		uint32 dict_offset = i * sizeof(TpDictEntry);
 
-		tp_segment_writer_write(&writer, &length, sizeof(uint32));
-		tp_segment_writer_write(&writer, terms[i].term, length);
-		tp_segment_writer_write(&writer, &dict_offset, sizeof(uint32));
+		merge_sink_write(sink, &length, sizeof(uint32));
+		merge_sink_write(sink, terms[i].term, length);
+		merge_sink_write(sink, &dict_offset, sizeof(uint32));
 	}
 
-	/* Record entries offset - dict entries written after postings loop */
-	header.entries_offset = writer.current_offset;
+	/* Record entries offset - dict entries written after postings */
+	header.entries_offset = sink->current_offset;
 
-	/* Write placeholder dict entries - we'll fill them in after streaming */
+	/* Write placeholder dict entries */
 	{
 		TpDictEntry placeholder;
 		memset(&placeholder, 0, sizeof(TpDictEntry));
 		for (i = 0; i < num_terms; i++)
-			tp_segment_writer_write(
-					&writer, &placeholder, sizeof(TpDictEntry));
+			merge_sink_write(sink, &placeholder, sizeof(TpDictEntry));
 	}
 
-	/* Postings start here - streaming format writes postings first */
-	header.postings_offset = writer.current_offset;
+	/* Postings start here */
+	header.postings_offset = sink->current_offset;
 
 	/* Initialize per-term tracking and skip entry accumulator */
 	term_blocks = palloc0(num_terms * sizeof(MergeTermBlockInfo));
@@ -853,10 +1124,72 @@ write_merged_segment(
 	all_skip_entries = palloc(skip_entries_capacity * sizeof(TpSkipEntry));
 
 	/*
-	 * Streaming pass: for each term, stream postings one block at a time
-	 * from the N-way merge and write immediately. This avoids loading all
-	 * postings for a term into memory at once, which can exceed
-	 * MaxAllocSize for high-frequency terms in large corpora.
+	 * Helper macro: flush a full or partial block_buf to the sink.
+	 * Computes skip entry, optionally compresses, writes data,
+	 * and accumulates the skip entry.
+	 */
+#define FLUSH_BLOCK(block_buf, block_count, num_blocks)                         \
+	do                                                                          \
+	{                                                                           \
+		TpSkipEntry skip_;                                                      \
+		uint16		max_tf_	  = 0;                                              \
+		uint8		min_norm_ = 255;                                            \
+		uint32		last_did_ = 0;                                              \
+		uint32		j_;                                                         \
+                                                                                \
+		for (j_ = 0; j_ < (block_count); j_++)                                  \
+		{                                                                       \
+			if ((block_buf)[j_].doc_id > last_did_)                             \
+				last_did_ = (block_buf)[j_].doc_id;                             \
+			if ((block_buf)[j_].frequency > max_tf_)                            \
+				max_tf_ = (block_buf)[j_].frequency;                            \
+			if ((block_buf)[j_].fieldnorm < min_norm_)                          \
+				min_norm_ = (block_buf)[j_].fieldnorm;                          \
+		}                                                                       \
+                                                                                \
+		skip_.last_doc_id	 = last_did_;                                       \
+		skip_.doc_count		 = (uint8)(block_count);                            \
+		skip_.block_max_tf	 = max_tf_;                                         \
+		skip_.block_max_norm = min_norm_;                                       \
+		skip_.posting_offset = sink->current_offset;                            \
+		memset(skip_.reserved, 0, sizeof(skip_.reserved));                      \
+                                                                                \
+		if (tp_compress_segments)                                               \
+		{                                                                       \
+			uint8  cbuf_[TP_MAX_COMPRESSED_BLOCK_SIZE];                         \
+			uint32 csize_;                                                      \
+                                                                                \
+			csize_		= tp_compress_block((block_buf), (block_count), cbuf_); \
+			skip_.flags = TP_BLOCK_FLAG_DELTA;                                  \
+			merge_sink_write(sink, cbuf_, csize_);                              \
+		}                                                                       \
+		else                                                                    \
+		{                                                                       \
+			skip_.flags = TP_BLOCK_FLAG_UNCOMPRESSED;                           \
+			merge_sink_write(                                                   \
+					sink,                                                       \
+					(block_buf),                                                \
+					(block_count) * sizeof(TpBlockPosting));                    \
+		}                                                                       \
+                                                                                \
+		if (skip_entries_count >= skip_entries_capacity)                        \
+		{                                                                       \
+			skip_entries_capacity *= 2;                                         \
+			all_skip_entries = repalloc_huge(                                   \
+					all_skip_entries,                                           \
+					skip_entries_capacity * sizeof(TpSkipEntry));               \
+		}                                                                       \
+		all_skip_entries[skip_entries_count++] = skip_;                         \
+		(num_blocks)++;                                                         \
+	} while (0)
+
+	/*
+	 * Streaming pass: for each term, stream postings one block at a
+	 * time and write immediately.
+	 *
+	 * When disjoint_sources is true, drain sources sequentially
+	 * (source 0 fully, then source 1, etc.) without CTID lookups.
+	 * Otherwise, use N-way CTID-comparison merge.
 	 */
 	for (i = 0; i < num_terms; i++)
 	{
@@ -868,7 +1201,7 @@ write_merged_segment(
 		uint32				  num_blocks  = 0;
 
 		/* Record where this term's postings start */
-		term_blocks[i].posting_offset	= writer.current_offset;
+		term_blocks[i].posting_offset	= sink->current_offset;
 		term_blocks[i].skip_entry_start = skip_entries_count;
 
 		if (terms[i].num_segment_refs == 0)
@@ -878,152 +1211,88 @@ write_merged_segment(
 			continue;
 		}
 
-		/* Initialize N-way merge sources */
-		psources =
-				init_term_posting_sources(&terms[i], sources, &num_psources);
-
-		/*
-		 * Stream through postings one block at a time. We collect
-		 * TP_BLOCK_SIZE postings into block_buf, then write the
-		 * block and its skip entry immediately.
-		 */
-		while (true)
+		if (disjoint_sources)
 		{
-			int min_idx = find_min_posting_source(psources, num_psources);
-			if (min_idx < 0)
-				break;
+			/*
+			 * Fast path: sequential drain. Sources have disjoint
+			 * CTID ranges, so drain source 0, then 1, etc.
+			 * Reads doc_id/frequency/fieldnorm directly from
+			 * the block posting array, skipping CTID lookups.
+			 */
+			psources = init_term_posting_sources_fast(
+					&terms[i], sources, &num_psources);
 
+			for (int src = 0; src < num_psources; src++)
 			{
-				int	   src_idx	  = terms[i].segment_refs[min_idx].segment_idx;
-				uint32 old_doc_id = psources[min_idx].current.old_doc_id;
-				uint32 new_doc_id =
-						doc_mapping.old_to_new[src_idx][old_doc_id];
+				while (!psources[src].exhausted)
+				{
+					TpBlockPosting *bp =
+							&psources[src].block_postings
+									 [psources[src].current_in_block];
+					int	   seg_idx = terms[i].segment_refs[src].segment_idx;
+					uint32 new_doc_id =
+							doc_mapping.old_to_new[seg_idx][bp->doc_id];
 
-				block_buf[block_count].doc_id = new_doc_id;
-				block_buf[block_count].frequency =
-						psources[min_idx].current.frequency;
-				block_buf[block_count].fieldnorm =
-						psources[min_idx].current.fieldnorm;
-				block_buf[block_count].reserved = 0;
+					block_buf[block_count].doc_id	 = new_doc_id;
+					block_buf[block_count].frequency = bp->frequency;
+					block_buf[block_count].fieldnorm = bp->fieldnorm;
+					block_buf[block_count].reserved	 = 0;
+					block_count++;
+					doc_count++;
+
+					posting_source_advance_fast(&psources[src]);
+
+					if (block_count == TP_BLOCK_SIZE)
+					{
+						FLUSH_BLOCK(block_buf, block_count, num_blocks);
+						block_count = 0;
+					}
+				}
 			}
-			block_count++;
-			doc_count++;
+		}
+		else
+		{
+			/*
+			 * Standard N-way merge: compare CTIDs across sources.
+			 */
+			psources = init_term_posting_sources(
+					&terms[i], sources, &num_psources);
 
-			posting_source_advance(&psources[min_idx]);
-
-			/* Write block when full */
-			if (block_count == TP_BLOCK_SIZE)
+			while (true)
 			{
-				TpSkipEntry skip;
-				uint16		max_tf		= 0;
-				uint8		min_norm	= 255;
-				uint32		last_doc_id = 0;
-				uint32		j;
+				int min_idx = find_min_posting_source(psources, num_psources);
+				if (min_idx < 0)
+					break;
 
-				for (j = 0; j < block_count; j++)
 				{
-					if (block_buf[j].doc_id > last_doc_id)
-						last_doc_id = block_buf[j].doc_id;
-					if (block_buf[j].frequency > max_tf)
-						max_tf = block_buf[j].frequency;
-					if (block_buf[j].fieldnorm < min_norm)
-						min_norm = block_buf[j].fieldnorm;
+					int src_idx = terms[i].segment_refs[min_idx].segment_idx;
+					uint32 old_doc_id = psources[min_idx].current.old_doc_id;
+					uint32 new_doc_id =
+							doc_mapping.old_to_new[src_idx][old_doc_id];
+
+					block_buf[block_count].doc_id = new_doc_id;
+					block_buf[block_count].frequency =
+							psources[min_idx].current.frequency;
+					block_buf[block_count].fieldnorm =
+							psources[min_idx].current.fieldnorm;
+					block_buf[block_count].reserved = 0;
 				}
+				block_count++;
+				doc_count++;
 
-				skip.last_doc_id	= last_doc_id;
-				skip.doc_count		= (uint8)block_count;
-				skip.block_max_tf	= max_tf;
-				skip.block_max_norm = min_norm;
-				skip.posting_offset = writer.current_offset;
-				memset(skip.reserved, 0, sizeof(skip.reserved));
+				posting_source_advance(&psources[min_idx]);
 
-				if (tp_compress_segments)
+				if (block_count == TP_BLOCK_SIZE)
 				{
-					uint8  cbuf[TP_MAX_COMPRESSED_BLOCK_SIZE];
-					uint32 csize;
-
-					csize = tp_compress_block(block_buf, block_count, cbuf);
-					skip.flags = TP_BLOCK_FLAG_DELTA;
-					tp_segment_writer_write(&writer, cbuf, csize);
+					FLUSH_BLOCK(block_buf, block_count, num_blocks);
+					block_count = 0;
 				}
-				else
-				{
-					skip.flags = TP_BLOCK_FLAG_UNCOMPRESSED;
-					tp_segment_writer_write(
-							&writer,
-							block_buf,
-							block_count * sizeof(TpBlockPosting));
-				}
-
-				if (skip_entries_count >= skip_entries_capacity)
-				{
-					skip_entries_capacity *= 2;
-					all_skip_entries = repalloc_huge(
-							all_skip_entries,
-							skip_entries_capacity * sizeof(TpSkipEntry));
-				}
-				all_skip_entries[skip_entries_count++] = skip;
-
-				num_blocks++;
-				block_count = 0;
 			}
 		}
 
 		/* Write final partial block if any */
 		if (block_count > 0)
-		{
-			TpSkipEntry skip;
-			uint16		max_tf		= 0;
-			uint8		min_norm	= 255;
-			uint32		last_doc_id = 0;
-			uint32		j;
-
-			for (j = 0; j < block_count; j++)
-			{
-				if (block_buf[j].doc_id > last_doc_id)
-					last_doc_id = block_buf[j].doc_id;
-				if (block_buf[j].frequency > max_tf)
-					max_tf = block_buf[j].frequency;
-				if (block_buf[j].fieldnorm < min_norm)
-					min_norm = block_buf[j].fieldnorm;
-			}
-
-			skip.last_doc_id	= last_doc_id;
-			skip.doc_count		= (uint8)block_count;
-			skip.block_max_tf	= max_tf;
-			skip.block_max_norm = min_norm;
-			skip.posting_offset = writer.current_offset;
-			memset(skip.reserved, 0, sizeof(skip.reserved));
-
-			if (tp_compress_segments)
-			{
-				uint8  cbuf[TP_MAX_COMPRESSED_BLOCK_SIZE];
-				uint32 csize;
-
-				csize	   = tp_compress_block(block_buf, block_count, cbuf);
-				skip.flags = TP_BLOCK_FLAG_DELTA;
-				tp_segment_writer_write(&writer, cbuf, csize);
-			}
-			else
-			{
-				skip.flags = TP_BLOCK_FLAG_UNCOMPRESSED;
-				tp_segment_writer_write(
-						&writer,
-						block_buf,
-						block_count * sizeof(TpBlockPosting));
-			}
-
-			if (skip_entries_count >= skip_entries_capacity)
-			{
-				skip_entries_capacity *= 2;
-				all_skip_entries = repalloc_huge(
-						all_skip_entries,
-						skip_entries_capacity * sizeof(TpSkipEntry));
-			}
-			all_skip_entries[skip_entries_count++] = skip;
-
-			num_blocks++;
-		}
+			FLUSH_BLOCK(block_buf, block_count, num_blocks);
 
 		term_blocks[i].doc_freq	   = doc_count;
 		term_blocks[i].block_count = (uint16)num_blocks;
@@ -1035,14 +1304,16 @@ write_merged_segment(
 			CHECK_FOR_INTERRUPTS();
 	}
 
+#undef FLUSH_BLOCK
+
 	/* Skip index starts here - after all postings */
-	header.skip_index_offset = writer.current_offset;
+	header.skip_index_offset = sink->current_offset;
 
 	/* Write all accumulated skip entries */
 	if (skip_entries_count > 0)
 	{
-		tp_segment_writer_write(
-				&writer,
+		merge_sink_write(
+				sink,
 				all_skip_entries,
 				skip_entries_count * sizeof(TpSkipEntry));
 	}
@@ -1050,203 +1321,134 @@ write_merged_segment(
 	pfree(all_skip_entries);
 
 	/* Write fieldnorm table */
-	header.fieldnorm_offset = writer.current_offset;
+	header.fieldnorm_offset = sink->current_offset;
 	if (docmap->num_docs > 0)
 	{
-		tp_segment_writer_write(
-				&writer, docmap->fieldnorms, docmap->num_docs * sizeof(uint8));
+		merge_sink_write(
+				sink, docmap->fieldnorms, docmap->num_docs * sizeof(uint8));
 	}
 
 	/* Write CTID pages array */
-	header.ctid_pages_offset = writer.current_offset;
+	header.ctid_pages_offset = sink->current_offset;
 	if (docmap->num_docs > 0)
 	{
-		tp_segment_writer_write(
-				&writer,
+		merge_sink_write(
+				sink,
 				docmap->ctid_pages,
 				docmap->num_docs * sizeof(BlockNumber));
 	}
 
 	/* Write CTID offsets array */
-	header.ctid_offsets_offset = writer.current_offset;
+	header.ctid_offsets_offset = sink->current_offset;
 	if (docmap->num_docs > 0)
 	{
-		tp_segment_writer_write(
-				&writer,
+		merge_sink_write(
+				sink,
 				docmap->ctid_offsets,
 				docmap->num_docs * sizeof(OffsetNumber));
 	}
 
-	/* Flush and write page index */
-	tp_segment_writer_flush(&writer);
+	/* Finalize data_size */
+	header.data_size = sink->current_offset;
 
-	/*
-	 * Mark buffer as empty to prevent tp_segment_writer_finish from flushing
-	 * again and overwriting our dict entry updates.
-	 */
-	writer.buffer_pos = SizeOfPageHeaderData;
-
-	page_index_root =
-			write_page_index(index, writer.pages, writer.pages_allocated);
-	header.page_index = page_index_root;
-	header.data_size  = writer.current_offset;
-	header.num_pages  = writer.pages_allocated;
-
-	/*
-	 * Now write the dictionary entries with correct skip_index_offset values.
-	 * We need to update each entry on disk. Do this BEFORE
-	 * tp_segment_writer_finish so writer.pages is still valid.
-	 */
+	/* Pages-only: flush writer, write page index */
+	if (!sink->is_buffile)
 	{
-		Buffer dict_buf = InvalidBuffer;
-		uint32 entry_logical_page;
-		uint32 current_page = UINT32_MAX;
+		BlockNumber page_index_root;
 
+		tp_segment_writer_flush(&sink->writer);
+		sink->writer.buffer_pos = SizeOfPageHeaderData;
+
+		if (sink->writer.page_counter != NULL)
+			page_index_root = write_page_index_with_counter(
+					sink->index,
+					sink->writer.pages,
+					sink->writer.pages_allocated,
+					sink->writer.page_counter);
+		else
+			page_index_root = write_page_index(
+					sink->index,
+					sink->writer.pages,
+					sink->writer.pages_allocated);
+		header.page_index = page_index_root;
+		header.num_pages  = sink->writer.pages_allocated;
+	}
+
+	/* Backpatch dict entries */
+	{
+		TpDictEntry *dict_entries;
+
+		dict_entries = palloc(num_terms * sizeof(TpDictEntry));
 		for (i = 0; i < num_terms; i++)
 		{
-			TpDictEntry entry;
-			uint64		entry_offset;
-			uint32		page_offset;
-			BlockNumber physical_block;
-
-			/* Build the entry */
-			entry.skip_index_offset =
+			dict_entries[i].skip_index_offset =
 					header.skip_index_offset +
 					((uint64)term_blocks[i].skip_entry_start *
 					 sizeof(TpSkipEntry));
-			entry.block_count = term_blocks[i].block_count;
-			entry.reserved	  = 0;
-			entry.doc_freq	  = term_blocks[i].doc_freq;
-
-			/* Calculate where this entry is in the segment */
-			entry_offset = header.entries_offset +
-						   ((uint64)i * sizeof(TpDictEntry));
-			entry_logical_page = (uint32)(entry_offset /
-										  SEGMENT_DATA_PER_PAGE);
-			page_offset = (uint32)(entry_offset % SEGMENT_DATA_PER_PAGE);
-
-			/* Read page if different from current */
-			if (entry_logical_page != current_page)
-			{
-				if (current_page != UINT32_MAX)
-				{
-					MarkBufferDirty(dict_buf);
-					UnlockReleaseBuffer(dict_buf);
-				}
-
-				physical_block = writer.pages[entry_logical_page];
-				dict_buf	   = ReadBuffer(index, physical_block);
-				LockBuffer(dict_buf, BUFFER_LOCK_EXCLUSIVE);
-				current_page = entry_logical_page;
-			}
-
-			/* Write entry to page - handle page boundary spanning */
-			{
-				uint32 bytes_on_this_page = SEGMENT_DATA_PER_PAGE -
-											page_offset;
-
-				if (bytes_on_this_page >= sizeof(TpDictEntry))
-				{
-					/* Entry fits entirely on this page */
-					Page  page = BufferGetPage(dict_buf);
-					char *dest = (char *)page + SizeOfPageHeaderData +
-								 page_offset;
-					memcpy(dest, &entry, sizeof(TpDictEntry));
-				}
-				else
-				{
-					/* Entry spans two pages */
-					Page  page = BufferGetPage(dict_buf);
-					char *dest = (char *)page + SizeOfPageHeaderData +
-								 page_offset;
-					char *src = (char *)&entry;
-
-					/* Write first part to current page */
-					memcpy(dest, src, bytes_on_this_page);
-
-					/* Move to next page */
-					MarkBufferDirty(dict_buf);
-					UnlockReleaseBuffer(dict_buf);
-
-					entry_logical_page++;
-					if (entry_logical_page >= writer.pages_allocated)
-						ereport(ERROR,
-								(errcode(ERRCODE_INTERNAL_ERROR),
-								 errmsg("dict entry spans beyond allocated")));
-
-					physical_block = writer.pages[entry_logical_page];
-					dict_buf	   = ReadBuffer(index, physical_block);
-					LockBuffer(dict_buf, BUFFER_LOCK_EXCLUSIVE);
-					current_page = entry_logical_page;
-
-					/* Write remaining part to next page */
-					page = BufferGetPage(dict_buf);
-					dest = (char *)page + SizeOfPageHeaderData;
-					memcpy(dest,
-						   src + bytes_on_this_page,
-						   sizeof(TpDictEntry) - bytes_on_this_page);
-				}
-			}
+			dict_entries[i].block_count = term_blocks[i].block_count;
+			dict_entries[i].reserved	= 0;
+			dict_entries[i].doc_freq	= term_blocks[i].doc_freq;
 		}
 
-		/* Release last buffer */
-		if (current_page != UINT32_MAX)
-		{
-			MarkBufferDirty(dict_buf);
-			UnlockReleaseBuffer(dict_buf);
-		}
+		merge_sink_write_at(
+				sink,
+				header.entries_offset,
+				dict_entries,
+				num_terms * sizeof(TpDictEntry));
+		pfree(dict_entries);
 	}
 
-	tp_segment_writer_finish(&writer);
+	/* Backpatch header */
+	merge_sink_write_at(sink, 0, &header, sizeof(TpSegmentHeader));
 
-	/* Update header on disk with final offsets */
-	header_buf = ReadBuffer(index, header_block);
-	LockBuffer(header_buf, BUFFER_LOCK_EXCLUSIVE);
-	header_page		= BufferGetPage(header_buf);
-	existing_header = (TpSegmentHeader *)PageGetContents(header_page);
+	/* Pages-only: finish writer */
+	if (!sink->is_buffile)
+		tp_segment_writer_finish(&sink->writer);
 
-	existing_header->dictionary_offset	 = header.dictionary_offset;
-	existing_header->strings_offset		 = header.strings_offset;
-	existing_header->entries_offset		 = header.entries_offset;
-	existing_header->postings_offset	 = header.postings_offset;
-	existing_header->skip_index_offset	 = header.skip_index_offset;
-	existing_header->fieldnorm_offset	 = header.fieldnorm_offset;
-	existing_header->ctid_pages_offset	 = header.ctid_pages_offset;
-	existing_header->ctid_offsets_offset = header.ctid_offsets_offset;
-	existing_header->num_docs			 = header.num_docs;
-	existing_header->data_size			 = header.data_size;
-	existing_header->num_pages			 = header.num_pages;
-	existing_header->page_index			 = header.page_index;
+	/* BufFile: seek to end position */
+	if (sink->is_buffile)
+	{
+		int	  end_fileno;
+		off_t end_offset;
 
-	MarkBufferDirty(header_buf);
-	UnlockReleaseBuffer(header_buf);
+		tp_buffile_decompose_offset(
+				sink->base_abs + sink->current_offset,
+				&end_fileno,
+				&end_offset);
+		BufFileSeek(sink->file, end_fileno, end_offset, SEEK_SET);
+	}
 
 	/* Cleanup */
 	pfree(string_offsets);
 	pfree(term_blocks);
 	free_merge_doc_mapping(&doc_mapping);
 	tp_docmap_destroy(docmap);
-	if (writer.pages)
-		pfree(writer.pages);
-
-	return header_block;
 }
 
+/* ----------------------------------------------------------------
+ * Level-based merge (uses pages sink)
+ * ----------------------------------------------------------------
+ */
+
 /*
- * Merge all segments at the specified level into a single segment at level+1.
+ * Merge up to max_merge segments from the specified level into a
+ * single segment at level+1.  Returns the new segment's header
+ * block, or InvalidBlockNumber on failure.
  */
 BlockNumber
-tp_merge_level_segments(Relation index, uint32 level)
+tp_merge_level_segments(Relation index, uint32 level, uint32 max_merge)
 {
 	TpIndexMetaPage metap;
 	Buffer			metabuf;
 	Page			metapage;
 	BlockNumber		first_segment;
+	uint32			total_at_level;
 	uint32			segment_count;
 	TpMergeSource  *sources;
 	int				num_sources;
 	int				i;
 	BlockNumber		current;
+	BlockNumber		remainder_head; /* First unmerged segment */
 	TpMergedTerm   *merged_terms	 = NULL;
 	uint32			num_merged_terms = 0;
 	uint32			merged_capacity	 = 0;
@@ -1275,17 +1477,28 @@ tp_merge_level_segments(Relation index, uint32 level)
 	metapage = BufferGetPage(metabuf);
 	metap	 = (TpIndexMetaPage)PageGetContents(metapage);
 
-	first_segment = metap->level_heads[level];
-	segment_count = metap->level_counts[level];
+	first_segment  = metap->level_heads[level];
+	total_at_level = metap->level_counts[level];
 
 	UnlockReleaseBuffer(metabuf);
 
-	if (first_segment == InvalidBlockNumber || segment_count == 0)
+	if (first_segment == InvalidBlockNumber || total_at_level == 0)
 	{
 		return InvalidBlockNumber;
 	}
 
-	elog(DEBUG1, "Merging %u segments at level %u", segment_count, level);
+	/*
+	 * Merge at most max_merge segments per batch.  For normal
+	 * compaction this is segments_per_level; for post-build
+	 * compaction it can be UINT32_MAX to merge everything.
+	 */
+	segment_count = Min(total_at_level, max_merge);
+
+	elog(DEBUG1,
+		 "Merging %u of %u segments at level %u",
+		 segment_count,
+		 total_at_level,
+		 level);
 
 	/*
 	 * Allocate page tracking arrays in current context (not merge context)
@@ -1304,54 +1517,69 @@ tp_merge_level_segments(Relation index, uint32 level)
 	sources		= palloc0(sizeof(TpMergeSource) * segment_count);
 	num_sources = 0;
 
-	/* Open all segments in the chain */
-	current = first_segment;
-	while (current != InvalidBlockNumber && num_sources < (int)segment_count)
+	/*
+	 * Walk the chain, consuming exactly segment_count segments.
+	 * Track segments_walked separately from num_sources because
+	 * merge_source_init can fail (e.g. empty segment), in which
+	 * case we still consumed the segment from the chain.
+	 */
 	{
-		TpSegmentReader *reader;
-		BlockNumber		 next;
-		uint64			 seg_tokens;
+		uint32 segments_walked = 0;
 
-		reader = tp_segment_open(index, current);
-		if (reader)
+		current = first_segment;
+		while (current != InvalidBlockNumber &&
+			   segments_walked < segment_count)
 		{
-			/* Get stats and next pointer, then close this reader */
-			next	   = reader->header->next_segment;
-			seg_tokens = reader->header->total_tokens;
-			tp_segment_close(reader);
+			TpSegmentReader *reader;
+			BlockNumber		 next;
+			uint64			 seg_tokens;
 
-			/*
-			 * Collect pages from this segment for later freeing.
-			 * Allocate in parent context so it survives merge context delete.
-			 */
+			reader = tp_segment_open(index, current);
+			if (reader)
 			{
-				MemoryContext save_ctx = MemoryContextSwitchTo(old_ctx);
-				uint32		  page_count;
+				next	   = reader->header->next_segment;
+				seg_tokens = reader->header->total_tokens;
+				tp_segment_close(reader);
 
-				page_count = tp_segment_collect_pages(
-						index, current, &segment_pages[num_segments_tracked]);
-				segment_page_counts[num_segments_tracked] = page_count;
-				total_pages_to_free += page_count;
-				num_segments_tracked++;
+				/*
+				 * Collect pages for later freeing (parent context).
+				 */
+				{
+					MemoryContext save_ctx = MemoryContextSwitchTo(old_ctx);
+					uint32		  page_count;
 
-				MemoryContextSwitchTo(save_ctx);
+					page_count = tp_segment_collect_pages(
+							index,
+							current,
+							&segment_pages[num_segments_tracked]);
+					segment_page_counts[num_segments_tracked] = page_count;
+					total_pages_to_free += page_count;
+					num_segments_tracked++;
+
+					MemoryContextSwitchTo(save_ctx);
+				}
+
+				if (merge_source_init(&sources[num_sources], index, current))
+				{
+					total_tokens += seg_tokens;
+					num_sources++;
+				}
+
+				current = next;
 			}
-
-			/* Now init merge source (which opens its own reader) */
-			if (merge_source_init(&sources[num_sources], index, current))
+			else
 			{
-				/* Accumulate corpus statistics only for successful inits */
-				total_tokens += seg_tokens;
-				num_sources++;
+				break;
 			}
+			segments_walked++;
+		}
 
-			current = next;
-		}
-		else
-		{
-			break;
-		}
+		/* Update segment_count to reflect actual segments consumed */
+		segment_count = segments_walked;
 	}
+
+	/* First unmerged segment (may be InvalidBlockNumber) */
+	remainder_head = current;
 
 	if (num_sources == 0)
 	{
@@ -1384,15 +1612,18 @@ tp_merge_level_segments(Relation index, uint32 level)
 
 		min_term = sources[min_idx].current_term;
 
-		/* Grow merged terms array if needed */
+		/* Grow merged terms array if needed (may exceed 1GB for large
+		 * corpora) */
 		if (num_merged_terms >= merged_capacity)
 		{
 			merged_capacity = merged_capacity == 0 ? 1024
 												   : merged_capacity * 2;
 			if (merged_terms == NULL)
-				merged_terms = palloc(merged_capacity * sizeof(TpMergedTerm));
+				merged_terms = palloc_extended(
+						merged_capacity * sizeof(TpMergedTerm),
+						MCXT_ALLOC_HUGE);
 			else
-				merged_terms = repalloc(
+				merged_terms = repalloc_huge(
 						merged_terms, merged_capacity * sizeof(TpMergedTerm));
 		}
 
@@ -1435,18 +1666,27 @@ tp_merge_level_segments(Relation index, uint32 level)
 		CHECK_FOR_INTERRUPTS();
 	}
 
-	/* Write merged segment at next level (sources must remain open for
-	 * streaming) */
+	/* Write merged segment using pages sink */
 	if (num_merged_terms > 0)
 	{
-		new_segment = write_merged_segment(
-				index,
+		TpMergeSink sink;
+
+		merge_sink_init_pages(&sink, index);
+		new_segment = sink.writer.pages[0];
+
+		write_merged_segment_to_sink(
+				&sink,
 				merged_terms,
 				num_merged_terms,
 				sources,
 				num_sources,
 				level + 1,
-				total_tokens);
+				total_tokens,
+				false);
+
+		/* Free writer pages array */
+		if (sink.writer.pages)
+			pfree(sink.writer.pages);
 
 		/* Free merged terms data */
 		for (i = 0; i < (int)num_merged_terms; i++)
@@ -1463,7 +1703,7 @@ tp_merge_level_segments(Relation index, uint32 level)
 		new_segment = InvalidBlockNumber;
 	}
 
-	/* Close all sources (after write_merged_segment is done with them) */
+	/* Close all sources (after write is done with them) */
 	for (i = 0; i < num_sources; i++)
 	{
 		merge_source_close(&sources[i]);
@@ -1502,9 +1742,12 @@ tp_merge_level_segments(Relation index, uint32 level)
 	metapage = BufferGetPage(metabuf);
 	metap	 = (TpIndexMetaPage)PageGetContents(metapage);
 
-	/* Clear source level */
-	metap->level_heads[level]  = InvalidBlockNumber;
-	metap->level_counts[level] = 0;
+	/*
+	 * Update source level: keep any unmerged remainder segments.
+	 * If we merged all segments, the level is now empty.
+	 */
+	metap->level_heads[level]  = remainder_head;
+	metap->level_counts[level] = total_at_level - segment_count;
 
 	/* Add merged segment to target level */
 	if (metap->level_heads[level + 1] != InvalidBlockNumber)
@@ -1598,10 +1841,57 @@ tp_maybe_compact_level(Relation index, uint32 level)
 	if (level_count < (uint16)tp_segments_per_level)
 		return; /* Level not full */
 
-	/* Merge this level */
-	if (tp_merge_level_segments(index, level) != InvalidBlockNumber)
+	/*
+	 * Merge batches of segments_per_level until the level is
+	 * below threshold.  Each batch produces one segment at
+	 * level+1; after the loop we check if that level also needs
+	 * compaction.
+	 */
+	while (level_count >= (uint16)tp_segments_per_level)
 	{
-		/* Recursively check next level */
-		tp_maybe_compact_level(index, level + 1);
+		if (tp_merge_level_segments(
+					index, level, (uint32)tp_segments_per_level) ==
+			InvalidBlockNumber)
+			break;
+
+		/* Re-read the level count after merge */
+		metabuf = ReadBuffer(index, 0);
+		LockBuffer(metabuf, BUFFER_LOCK_SHARE);
+		metapage	= BufferGetPage(metabuf);
+		metap		= (TpIndexMetaPage)PageGetContents(metapage);
+		level_count = metap->level_counts[level];
+		UnlockReleaseBuffer(metabuf);
+	}
+
+	/* Check if next level now needs compaction */
+	tp_maybe_compact_level(index, level + 1);
+}
+
+/*
+ * Force-merge all segments into a single segment, à la Lucene's
+ * forceMerge(1).  Merges ALL segments at each level in a single
+ * batch, ignoring the segments_per_level threshold.
+ */
+void
+tp_force_merge_all(Relation index)
+{
+	for (uint32 level = 0; level < TP_MAX_LEVELS - 1; level++)
+	{
+		Buffer			metabuf;
+		Page			metapage;
+		TpIndexMetaPage metap;
+		uint16			count;
+
+		metabuf = ReadBuffer(index, 0);
+		LockBuffer(metabuf, BUFFER_LOCK_SHARE);
+		metapage = BufferGetPage(metabuf);
+		metap	 = (TpIndexMetaPage)PageGetContents(metapage);
+		count	 = metap->level_counts[level];
+		UnlockReleaseBuffer(metabuf);
+
+		if (count < 2)
+			break; /* Nothing to merge at this level or above */
+
+		tp_merge_level_segments(index, level, UINT32_MAX);
 	}
 }

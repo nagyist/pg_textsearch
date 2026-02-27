@@ -96,6 +96,11 @@ LIMIT 5;
 CREATE INDEX msmarco_bm25_idx ON msmarco_passages
     USING bm25(passage_text) WITH (text_config='english');
 
+-- Force-merge all segments into one so layout is deterministic
+-- regardless of parallel worker count.
+\echo 'Force-merging segments...'
+SELECT bm25_force_merge('msmarco_bm25_idx');
+
 -- Report index and table sizes
 \echo ''
 \echo '=== Index Size Report ==='
