@@ -1,4 +1,4 @@
--- Upgrade from 0.6.1 to 1.0.0-dev
+-- Upgrade from 0.6.1 to 1.0.0
 -- No schema changes
 
 -- Verify loaded library matches this SQL script version
@@ -12,16 +12,24 @@ BEGIN
             'pg_textsearch library not loaded. '
             'Add pg_textsearch to shared_preload_libraries and restart.';
     END IF;
-    IF lib_ver OPERATOR(pg_catalog.<>) '1.0.0-dev' THEN
+    IF lib_ver OPERATOR(pg_catalog.<>) '1.0.0' THEN
         RAISE EXCEPTION
             'pg_textsearch library version mismatch: loaded=%, expected=%. '
             'Restart the server after installing the new binary.',
-            lib_ver, '1.0.0-dev';
+            lib_ver, '1.0.0';
     END IF;
 END $$;
 
+-- Revoke public execute on debug functions (superuser-only).
+REVOKE EXECUTE ON FUNCTION bm25_dump_index(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION bm25_summarize_index(text) FROM PUBLIC;
+
+-- Drop file-writing debug functions (moved behind compile-time flag).
+DROP FUNCTION IF EXISTS bm25_dump_index(text, text);
+DROP FUNCTION IF EXISTS bm25_debug_pageviz(text, text);
+
 DO $$
 BEGIN
-    RAISE WARNING 'pg_textsearch v1.0.0-dev is a prerelease. Do not use in production.';
+    RAISE INFO 'pg_textsearch v1.0.0';
 END
 $$;
