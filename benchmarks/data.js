@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776057120529,
+  "lastUpdate": 1776057121864,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -7432,6 +7432,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco_gin - Index Build Time",
             "value": 150674.542,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_gin - Index Size",
+            "value": 824.93,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "b622d909d9a12186814b72baa49037048a9ef6ac",
+          "message": "docs: improve README WHERE clause examples (#306)\n\n## Summary\n- Replace score-threshold-only examples with more intuitive patterns\n- Explicit index specification now uses ORDER BY + LIMIT instead of a\nscore comparison\n- Post-filtering section leads with a price filter (common case), then\nshows score thresholds as a secondary option with caveats about\ncorpus-dependent interpretation\n- Faceted search uses a top-k subquery instead of a score cutoff\n\n## Testing\nDocs-only change, no code affected.",
+          "timestamp": "2026-04-10T03:24:20Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/b622d909d9a12186814b72baa49037048a9ef6ac"
+        },
+        "date": 1776057121569,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco_gin - Index Build Time",
+            "value": 149345.487,
             "unit": "ms"
           },
           {
