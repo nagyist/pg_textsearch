@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776501687527,
+  "lastUpdate": 1776501690032,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -9367,6 +9367,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_wikipedia_concurrent - Concurrent Insert Time",
             "value": 15877.247408,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tj@timescale.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "54ab691bfad94b016bdeb5dbd22ed7680e12e393",
+          "message": "refactor: deduplicate read_term_at_index into dictionary.c (#324)\n\n## Summary\n\n- Extract shared term-reading logic from `segment.c` and `merge.c`\n  into `dictionary.c` as `tp_segment_read_term_at_index()`\n- Both files had nearly identical static functions for reading a term\n  string from the segment string pool\n\n## Testing\n\n- Compiles cleanly on PG17 and PG18\n- All regression tests pass (no behavioral change)",
+          "timestamp": "2026-04-17T20:33:31Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/54ab691bfad94b016bdeb5dbd22ed7680e12e393"
+        },
+        "date": 1776501689375,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_wikipedia_concurrent - Index Build Time",
+            "value": 4.55,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_wikipedia_concurrent - Insert Time",
+            "value": 21.391,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_wikipedia_concurrent - Concurrent Insert Time",
+            "value": 11981.088722,
             "unit": "ms"
           }
         ]
