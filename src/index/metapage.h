@@ -31,12 +31,17 @@ typedef struct TpLocalIndexState TpLocalIndexState;
  */
 typedef struct TpIndexMetaPageData
 {
-	uint32		magic;				 /* Magic number for validation */
-	uint32		version;			 /* Index format version */
-	Oid			text_config_oid;	 /* Text search configuration OID */
-	uint64		total_docs;			 /* Total number of documents */
+	uint32 magic;			/* Magic number for validation */
+	uint32 version;			/* Index format version */
+	Oid	   text_config_oid; /* Text search configuration OID */
+	/*
+	 * Persisted snapshot of the shared-memory atomic.  Updated at
+	 * each memtable spill; loaded back into the atomic on restart
+	 * via tp_rebuild_index_from_disk.
+	 */
+	uint64		total_docs;
 	uint64		_unused_total_terms; /* Unused, retained for on-disk compat */
-	uint64		total_len;			 /* Total length of all documents */
+	uint64		total_len;			 /* Analogous snapshot of total doc len */
 	float4		k1;					 /* BM25 k1 parameter */
 	float4		b;					 /* BM25 b parameter */
 	BlockNumber root_blkno;			 /* Root page of the index tree */
@@ -70,6 +75,14 @@ typedef struct TpDocidPageHeader
  */
 extern void			   tp_init_metapage(Page page, Oid text_config_oid);
 extern TpIndexMetaPage tp_get_metapage(Relation index);
+
+/*
+ * Persist the shared-memory atomic into the metapage.  Called at
+ * every spill site; caller must hold LW_EXCLUSIVE on the per-index
+ * lock.
+ */
+extern void
+tp_sync_metapage_stats(Relation index, TpLocalIndexState *index_state);
 /*
  * Document ID operations for crash recovery
  */

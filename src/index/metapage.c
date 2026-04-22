@@ -168,6 +168,40 @@ tp_get_metapage(Relation index)
 }
 
 /*
+ * Persist the shared-memory atomic into the metapage.  See
+ * TpIndexMetaPageData.total_docs in metapage.h for semantics.
+ */
+void
+tp_sync_metapage_stats(Relation index, TpLocalIndexState *index_state)
+{
+	Buffer			  mbuf;
+	GenericXLogState *xlog_state;
+	Page			  mpage;
+	TpIndexMetaPage	  mp;
+	uint32			  total_docs;
+	uint64			  total_len;
+
+	if (index_state == NULL || index_state->shared == NULL)
+		return;
+
+	total_docs = pg_atomic_read_u32(&index_state->shared->total_docs);
+	total_len  = pg_atomic_read_u64(&index_state->shared->total_len);
+
+	mbuf = ReadBuffer(index, TP_METAPAGE_BLKNO);
+	LockBuffer(mbuf, BUFFER_LOCK_EXCLUSIVE);
+
+	xlog_state = GenericXLogStart(index);
+	mpage	   = GenericXLogRegisterBuffer(xlog_state, mbuf, 0);
+	mp		   = (TpIndexMetaPage)PageGetContents(mpage);
+
+	mp->total_docs = total_docs;
+	mp->total_len  = total_len;
+
+	GenericXLogFinish(xlog_state);
+	UnlockReleaseBuffer(mbuf);
+}
+
+/*
  * Add a document ID to the docid pages for crash recovery
  * This appends the ctid to the chain of docid pages
  *
