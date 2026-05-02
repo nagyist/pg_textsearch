@@ -144,6 +144,32 @@ test-logical-replication:
 	@echo "Running logical replication tests..."
 	@cd test/scripts && ./logical_replication.sh
 
+test-replication-extended:
+	@echo "Running extended physical replication tests..."
+	@scripts="\
+	    replication.sh \
+	    replication_issue_342.sh \
+	    replication_parallel_build.sh \
+	    replication_correctness.sh \
+	    replication_concurrency.sh \
+	    replication_failover.sh \
+	    replication_compat.sh \
+	    replication_cascading.sh \
+	    replication_pitr.sh"; \
+	failed=""; \
+	for s in $$scripts; do \
+	    echo ""; \
+	    echo "==> $$s"; \
+	    if ! (cd test/scripts && "./$$s"); then \
+	        failed="$$failed $$s"; \
+	    fi; \
+	done; \
+	if [ -n "$$failed" ]; then \
+	    echo ""; \
+	    echo "Failed scripts:$$failed"; \
+	    exit 1; \
+	fi
+
 test-memory:
 	@echo "Running memory accounting tests..."
 	@cd test/scripts && ./memory_accounting.sh
@@ -330,4 +356,4 @@ help:
 	@echo "  make test-all"
 	@echo "  make format"
 
-.PHONY: test clean-test-dirs installcheck test-concurrency test-recovery test-segment test-stress test-cic test-replication test-logical-replication test-memory test-multi-index test-shell test-all expected lint-format format format-check format-diff format-single coverage coverage-build coverage-clean coverage-report help
+.PHONY: test clean-test-dirs installcheck test-concurrency test-recovery test-segment test-stress test-cic test-replication test-replication-extended test-logical-replication test-memory test-multi-index test-shell test-all expected lint-format format format-check format-diff format-single coverage coverage-build coverage-clean coverage-report help
