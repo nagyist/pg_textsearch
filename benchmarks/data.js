@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1778393655389,
+  "lastUpdate": 1778394077996,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -9542,6 +9542,43 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_cranfield (1.4K docs) - Throughput (avg ms/query)",
             "value": 0.7,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_cranfield (1.4K docs) - Index Size",
+            "value": 3.25,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "67af30f909398eb5ce88981b8faa92c59eefbc47",
+          "message": "Restore standard installcheck behavior (#353)\n\n## Summary\n- remove the custom `installcheck` override so PGXS owns the target\nagain\n- keep SQL regression coverage available through `make installcheck` /\n`make test`\n- keep shell-script coverage available through `make test-shell` and\n`make test-all`\n- update Makefile help, CLAUDE.md, and test README to describe the\ntarget split\n\n## Motivation\nDownstream consumers expect PGXS `installcheck` to run SQL regression\ntests without triggering extension-specific shell scripts. The previous\noverride made `installcheck` run both SQL regression and shell tests,\nwhich forced downstream harnesses to avoid the standard target.\n\nUpstream shell-script coverage remains explicit through local targets\nand existing GitHub Actions steps.\n\n## Validation\n- `git diff --check`\n- `make -n installcheck` shows PGXS pg_regress only\n- `make -n test-all` shows SQL regression plus shell-script targets\n- searched for stale docs claiming `installcheck` runs all tests\n- code review + re-review",
+          "timestamp": "2026-05-09T01:17:00Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/67af30f909398eb5ce88981b8faa92c59eefbc47"
+        },
+        "date": 1778394076328,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_cranfield (1.4K docs) - Index Build Time",
+            "value": 150.324,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_cranfield (1.4K docs) - Throughput (avg ms/query)",
+            "value": 0.89,
             "unit": "ms"
           },
           {
