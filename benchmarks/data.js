@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1778395328350,
+  "lastUpdate": 1778395330226,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -20079,6 +20079,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco_insert (0 docs) - Weighted Throughput (avg ms/query)",
             "value": 8.05,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Index Size",
+            "value": 2196.04,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "67af30f909398eb5ce88981b8faa92c59eefbc47",
+          "message": "Restore standard installcheck behavior (#353)\n\n## Summary\n- remove the custom `installcheck` override so PGXS owns the target\nagain\n- keep SQL regression coverage available through `make installcheck` /\n`make test`\n- keep shell-script coverage available through `make test-shell` and\n`make test-all`\n- update Makefile help, CLAUDE.md, and test README to describe the\ntarget split\n\n## Motivation\nDownstream consumers expect PGXS `installcheck` to run SQL regression\ntests without triggering extension-specific shell scripts. The previous\noverride made `installcheck` run both SQL regression and shell tests,\nwhich forced downstream harnesses to avoid the standard target.\n\nUpstream shell-script coverage remains explicit through local targets\nand existing GitHub Actions steps.\n\n## Validation\n- `git diff --check`\n- `make -n installcheck` shows PGXS pg_regress only\n- `make -n test-all` shows SQL regression plus shell-script targets\n- searched for stale docs claiming `installcheck` runs all tests\n- code review + re-review",
+          "timestamp": "2026-05-09T01:17:00Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/67af30f909398eb5ce88981b8faa92c59eefbc47"
+        },
+        "date": 1778395329952,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco_insert (0 docs) - Index Build Time",
+            "value": 1.4,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Insert Time",
+            "value": 760866.492,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 1 Token Query (p50)",
+            "value": 5.01,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 2 Token Query (p50)",
+            "value": 5.11,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 3 Token Query (p50)",
+            "value": 7.57,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 4 Token Query (p50)",
+            "value": 9.65,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 5 Token Query (p50)",
+            "value": 10.43,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 6 Token Query (p50)",
+            "value": 14.04,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 7 Token Query (p50)",
+            "value": 18.41,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 8+ Token Query (p50)",
+            "value": 24.95,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Weighted Latency (p50, ms)",
+            "value": 8.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Weighted Throughput (avg ms/query)",
+            "value": 9.72,
             "unit": "ms"
           },
           {
