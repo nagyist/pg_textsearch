@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1778484572019,
+  "lastUpdate": 1778484574822,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -7137,6 +7137,133 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
             "value": 7.08,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "be2f453d1c62bfb3a0c87f8886b5a002758ba9dc",
+          "message": "fix: chunked tokenization for oversized documents (#348)\n\n## Summary\n- Documents whose unique-token volume exceeds Postgres's `tsvector` 1 MB\nlexeme-dictionary cap (`MAXSTRPOS`) previously failed `CREATE INDEX`,\n`INSERT` (aminsert), `VACUUM` rebuild, `to_tpvector`, and standalone\n`<@>` scoring with `ERROR: string is too long for tsvector (N bytes, max\n1048575 bytes)`.\n- New `tp_tokenize_text` helper splits inputs >256 KB on ASCII\nwhitespace (UTF-8-safe byte fallback when no whitespace is present),\ntokenizes each chunk via `to_tsvector_byid`, and merges per-chunk\n`(term, freq)` arrays via sort + collapse. Single-chunk fast path is\nunchanged.\n- All five tokenization sites (`build.c` ×2, `build_parallel.c`,\n`vacuum.c`, `types/vector.c::to_tpvector`) route through the helper. The\nstandalone scoring path in `bm25_text_bm25query_score` was also\nrefactored to use the helper plus a sorted-array term lookup, since\n`find_term_frequency` previously walked the tsvector directly and would\nhave re-hit the same 1 MB cap on seq-scan rows.\n- Whitespace splitting is correct for whitespace-delimited scripts\n(Latin, Cyrillic, Greek, Arabic). Non-whitespace-delimited scripts (CJK,\nThai) get byte/codepoint splits — acceptable because Postgres's default\ntext-search parser doesn't emit per-word tokens for those scripts.\nDocumented in README.\n\n## Trigger\nThe bug requires *unique-token volume*, not raw byte size:\n`repeat('hello world ', 100000)` is 1.2 MB but only 2 lexemes and\nindexes fine. The repro and tests use ~250 K distinct tokens (~1.9 MB\nraw text).\n\n## Testing\n- New \\`test/sql/large_documents.sql\\` covers \\`CREATE INDEX\\`,\n\\`INSERT\\`, index-scan query, seq-scan / standalone-scoring query, and\n\\`VACUUM\\` on a 2 MB+ many-unique-token document.\n- Full \\`make installcheck\\` (60 tests) passes locally on PG 17.",
+          "timestamp": "2026-05-11T02:44:56Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/be2f453d1c62bfb3a0c87f8886b5a002758ba9dc"
+        },
+        "date": 1778484574132,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 230704.067,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 0.69,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 1.3,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 2.45,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 3.67,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 6.01,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 8.78,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 13.18,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 20.24,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Latency (p50, ms)",
+            "value": 3.91,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Throughput (avg ms/query)",
+            "value": 4.9,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 1216,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Partial VACUUM (concentrated delete)",
+            "value": 1423.717,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform delete)",
+            "value": 5505.358,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform update)",
+            "value": 3263.675,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Partial VACUUM",
+            "value": 1300.67,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Full VACUUM",
+            "value": 1300.67,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Partial VACUUM",
+            "value": 7.26,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Full VACUUM",
+            "value": 7.17,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Update VACUUM",
+            "value": 1300.96,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
+            "value": 6.97,
             "unit": "ms"
           }
         ]
