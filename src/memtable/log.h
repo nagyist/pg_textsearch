@@ -4,13 +4,12 @@
  *
  * log.h - On-disk memtable write path.
  *
- * Phase 2 of the memtable v2 redesign (see issue #374 and
- * plan.md).  This module appends document records to the
- * on-disk memtable page chain rooted at the metapage's
- * (memtable_head_blkno, memtable_tail_blkno) fields.
+ * Appends document records to the on-disk memtable page chain
+ * rooted at the metapage's (memtable_head_blkno,
+ * memtable_tail_blkno) fields.  See issue #374 and
+ * docs/memtable_v2.md for the design.
  *
- * Concurrency contract (committed to in Phase 2, enforced by
- * later phases):
+ * Concurrency contract:
  *
  *     per-index LWLock SHARED/EXCL
  *         └─► tail buffer EXCL
@@ -96,16 +95,27 @@ extern BlockNumber tp_memtable_append(
  * (intact `TP_MEMTABLE_PAGE_MAGIC` headers, but no metapage
  * pointer reaches them).  In-flight scans walking the old chain
  * via a metapage snapshot they already latched complete safely;
- * new scans see the new metapage and skip the orphans.  Phase 5b
- * will reclaim them in amvacuumcleanup.
+ * new scans see the new metapage and skip the orphans.
+ * Reclamation in amvacuumcleanup is a follow-up.
  *
  * Caller MUST already hold the per-index LWLock in EXCLUSIVE mode.
+ *
+ * `state` is required when the in-memory memtable cache is active
+ * (runtime mode); it provides the DSA attachment used to drop the
+ * cache's dshash tables after the metapage is published, and the
+ * pg_atomic counter that the cache's apply protocol uses as a
+ * stale-detection token.  Callers that legitimately have no cache
+ * (e.g. spill-from-build before the local state is wired up) may
+ * pass NULL; in that case the spill_generation bump and the
+ * tp_cache_clear call are both skipped (the build path constructs
+ * an empty cache anyway).
  */
 extern void tp_spill_finalize(
-		Relation	rel,
-		BlockNumber new_segment_root,
-		uint64		docs_delta,
-		uint64		len_delta);
+		TpLocalIndexState *state,
+		Relation		   rel,
+		BlockNumber		   new_segment_root,
+		uint64			   docs_delta,
+		uint64			   len_delta);
 
 /* Forward declaration to avoid heavy header include. */
 typedef struct TpLocalIndexState TpLocalIndexState;
@@ -116,11 +126,8 @@ typedef struct TpLocalIndexState TpLocalIndexState;
  *
  * Memtable v2 (issue #374): the previous DSA-based posting and
  * doc-length tables are gone; this is a thin wrapper around
- * tp_memtable_append() that also bumps:
- *   - corpus statistics (total_docs / total_len atomics, still
- *     written by the primary for compatibility with vacuum's
- *     shrinkage protocol; Phase 7B removes these),
- *   - terms_added_this_xact, used by tp_bulk_load_spill_check.
+ * tp_memtable_append() that also bumps terms_added_this_xact,
+ * used by tp_bulk_load_spill_check.
  *
  * `vector_bytes` points to `vector_len` bytes of opaque payload
  * (the in-memory v2 TpVector wire format).  The chain source
