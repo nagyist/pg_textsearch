@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780051907158,
+  "lastUpdate": 1780051914135,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -13599,6 +13599,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco (8.8M docs) - Index Size",
             "value": 1504.91,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "dfc15f0dcf577b420c098057e92de9e7e2b0c63f",
+          "message": "fix(memtable): validate reassembled fragment payloads in release builds (#385)\n\n## What\n\nMake `tpvector_validate_v2_buffer()` unconditional on the\nfragment-reassembly\npath in `src/memtable/chain_source.c`. Inline-record validation stays\ngated by\n`#ifdef USE_ASSERT_CHECKING` (no perf change for the common case).\n\n## Why\n\nAfter `reassemble_fragment()` stitches a multi-page payload together,\n`ingest_terms()` decodes it via `tpvector_entry_decode_advance`, which\nassumes a well-formed v2 buffer. The structural validation was\n`#ifdef USE_ASSERT_CHECKING`-gated — so release builds had no defense\nagainst a malformed reassembled buffer.\n\nA structurally-malformed payload here would:\n1. OOB-read in the varint decoder\n2. Silently poison the per-term accumulators\n3. Get serialised into the next L0 segment at spill, surviving restarts\n\nThe author's perf rationale (page CRC + same-backend write) is sound for\n**inline** records but doesn't transfer to **fragments**:\n- the bytes are reassembled across multiple buffer-locked page reads,\n- a fragment is by definition larger than a single page, so per-record\n  validation cost is amortised over a much larger payload,\n- on a standby, the bytes come from WAL replay rather than our local\n  write.\n\n## How\n\nOne call site change in `chain_source.c` — call\n`tpvector_validate_v2_buffer(full, rec->vector_len)` right after\n`reassemble_fragment()` and before `ingest_terms()`. The validation\nfunction already `ereport`s `ERRCODE_DATA_CORRUPTED` on bad input, so\nthe index becomes detection-first rather than silent-corruption-first.\n\n## Testing\n\n- `make installcheck` — 64/64 pass\n- `make format-check` (clang-format 21.1.8) — clean\n\nA targeted regression test that injects a malformed fragment payload\nand asserts the read path errors out (suggested in the review as\nTEST-5b) is a follow-up; this PR is the minimal correctness fix.\n\n## Context\n\nIdentified by the v2 memtable hardening review of PR #374 (FRAG-1,\nMedium severity).\n\nCo-authored-by: Todd J. Green <1738591+tjgreen42@users.noreply.github.com>\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+          "timestamp": "2026-05-27T22:38:37Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/dfc15f0dcf577b420c098057e92de9e7e2b0c63f"
+        },
+        "date": 1780051913834,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Build Time",
+            "value": 142482.47,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 17.67,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 17.17,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 22.7,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 24.55,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 26.95,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 33.11,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 33.96,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 41.42,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Throughput (avg ms/query)",
+            "value": 28.96,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Size",
+            "value": 1497.8,
             "unit": "MB"
           }
         ]
