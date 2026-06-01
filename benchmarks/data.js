@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780304521061,
+  "lastUpdate": 1780304528656,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -8777,6 +8777,133 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
             "value": 10.47,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f50e9831edffd97f4f1977448fe708c4575f7ebb",
+          "message": "Release v1.3.0 (#399)\n\nRelease v1.3.0.\n\n## Headlines\n\n- **On-disk memtable** (#374, #375, #385, #389): the L0 memtable now\n  lives in the index relation itself as a chain of WAL-logged pages\n  via `GenericXLog`, replacing the shared-memory structure. Removes\n  the old soft-limit machinery and a long tail of physical-replication\n  edge cases. New metapage version (v7), read-compatible with v6 via\n  lazy upgrade. See [`docs/memtable_v2.md`](docs/memtable_v2.md).\n- **In-memory memtable cache** (#391, #392, #395): query reads can be\n  served from a per-backend cache built over the on-disk chain, with\n  a 3-tier memory cap (per-index / global soft / global hard).\n  Controlled by `pg_textsearch.memtable_cache_enabled` and\n  `pg_textsearch.memory_limit`. See\n  [`docs/memtable_cache.md`](docs/memtable_cache.md).\n- **Multi-backend reindex regression coverage** (#386, #390, #396):\n  fixes a stale-CTIDs class of bug that surfaced under ALTER TABLE\n  heap rewrites concurrent with memtable activity.\n- **CI hardening** (#372, #394).\n\n## Release checklist (from RELEASING.md)\n\n- [x] Audit `sql/pg_textsearch--1.2.0--1.3.0.sql` against the main\n  SQL diff. Covers 11 new CREATE FUNCTIONs (memtable + cache test\n  scaffolds), DROP of `bm25_memory_usage()`, and the two ALTER\n  FUNCTION ... PARALLEL UNSAFE changes (`bm25_text_bm25query_score`,\n  `bm25_textarray_bm25query_score`).\n- [x] Ran `./scripts/bump-version.sh 1.3.0-dev 1.3.0`.\n- [x] Replaced banner image (`images/tapir_and_friends_v1.3.0.png`).\n- [x] `1.2.0` is already present in the upgrade-tests matrix (added\n  during the dev-bump in #373).",
+          "timestamp": "2026-05-29T20:35:07Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/f50e9831edffd97f4f1977448fe708c4575f7ebb"
+        },
+        "date": 1780304528116,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 211741.125,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 0.64,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 1.33,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 2.86,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 4.49,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 6.81,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 10.06,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 15.25,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 23.35,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Latency (p50, ms)",
+            "value": 4.53,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Throughput (avg ms/query)",
+            "value": 5.81,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 1216,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Partial VACUUM (concentrated delete)",
+            "value": 3240.068,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform delete)",
+            "value": 6455.881,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform update)",
+            "value": 4812.682,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Partial VACUUM",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Full VACUUM",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Partial VACUUM",
+            "value": 8.93,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Full VACUUM",
+            "value": 8.57,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Update VACUUM",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
+            "value": 9.72,
             "unit": "ms"
           }
         ]
