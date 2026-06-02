@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780402815631,
+  "lastUpdate": 1780402823183,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -27243,6 +27243,38 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco_gin_concurrent - Concurrent Insert Time",
             "value": 3442606.453661,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "2f882353d7e85e1fdce905514342c2aea00a9de3",
+          "message": "Make PG_CONFIG overridable via the environment (#402)\n\n## Summary\n\nChange `PG_CONFIG = pg_config` to `PG_CONFIG ?= pg_config` in the\nMakefile so the target `pg_config` can be selected via an **environment\nvariable**, in addition to the existing command-line override (`make\nPG_CONFIG=...`) and PATH-based selection.\n\n## Motivation\n\nWith a plain `=` assignment, make precedence means an environment\n`PG_CONFIG` is **ignored** (only a command-line override or PATH\nselection takes effect). Using `?=` (conditional assignment) lets the\nenvironment variable work too, which is convenient when building against\na specific PostgreSQL major version without prepending its bin directory\nto PATH:\n\n```sh\nPG_CONFIG=/usr/lib/postgresql/18/bin/pg_config make\n```\n\n## Behavior\n\n- Default unchanged: when `PG_CONFIG` is set neither in the environment\nnor on the command line, it still resolves to `pg_config`.\n- Command-line override (`make PG_CONFIG=...`) continues to win, as\nbefore.\n- Environment variable is now also honored.\n\nVerified all three selection paths resolve as expected and a clean build\nsucceeds.",
+          "timestamp": "2026-06-02T01:22:38Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/2f882353d7e85e1fdce905514342c2aea00a9de3"
+        },
+        "date": 1780402822540,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco_gin_concurrent - Index Build Time",
+            "value": 0.457,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_gin_concurrent - Concurrent Insert Time",
+            "value": 1211836.818981,
             "unit": "ms"
           }
         ]
