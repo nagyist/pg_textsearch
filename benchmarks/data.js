@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780655982684,
+  "lastUpdate": 1780655989931,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -37435,6 +37435,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia_concurrent (0 docs) - Weighted Throughput (avg ms/query)",
             "value": 0.9,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "dcbb8063564374c9fdfec73445086694cb2b2703",
+          "message": "Fix invalid segment header in standalone scoring during concurrent spill/merge (#404) (#405)\n\nFixes #404. The standalone `<@>` scoring path (used on a seqscan) opened\nsegment pages without the per-index lock, so a concurrent spill/merge\ncould free and recycle those blocks under the reader — surfacing as\n`invalid segment header ... magic=0x5450544D, expected 0x54505347`. It\nnow takes the lock `LW_SHARED` and re-reads the `level_heads` snapshot\nunder it before the segment reads (the unlocked snapshot can already\nname a recycled block), lazily on IDF cache-miss so cache-hit rows stay\nlock-free. The acquire is ownership-aware to coexist with the memtable\nchain source. The same unlocked segment walk in\n`bm25_summarize_index`/`bm25_dump_index` is fixed too.\n\nAdds `test/scripts/partial_concurrent_read.sh` (run by\n`test-concurrency`), which forces the standalone path under concurrent\nspill/merge; it fails before the fix and passes after.",
+          "timestamp": "2026-06-04T04:24:43Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/dcbb8063564374c9fdfec73445086694cb2b2703"
+        },
+        "date": 1780655989517,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia_concurrent (0 docs) - Index Build Time",
+            "value": 1.374,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Insert Time",
+            "value": 0.26,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Concurrent Insert Time",
+            "value": 24077.166352,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 1 Token Query (p50)",
+            "value": 0.34,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 2 Token Query (p50)",
+            "value": 0.54,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 3 Token Query (p50)",
+            "value": 0.73,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 4 Token Query (p50)",
+            "value": 0.9,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 5 Token Query (p50)",
+            "value": 1.07,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 6 Token Query (p50)",
+            "value": 1.26,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 7 Token Query (p50)",
+            "value": 1.44,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 8+ Token Query (p50)",
+            "value": 1.97,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Weighted Latency (p50, ms)",
+            "value": 0.85,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Weighted Throughput (avg ms/query)",
+            "value": 0.86,
             "unit": "ms"
           }
         ]
