@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781175202641,
+  "lastUpdate": 1781175210137,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -15777,6 +15777,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco (8.8M docs) - Index Size",
             "value": 1496.26,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "876497f424c4472cbe440212e64ecb982cb22feb",
+          "message": "Restrict debug_panic_after_spill_finalize to superusers (#407)\n\n`pg_textsearch.debug_panic_after_spill_finalize` was `PGC_USERSET` but\nforces an `elog(PANIC)` in the spill path, which crashes the whole\ncluster into recovery. Any role able to trigger a spill (e.g. a bulk\nINSERT past the threshold) could use it as a repeatable full-cluster\nDoS, so this makes it `PGC_SUSET` like the other debug GUCs. The\ncrash-safety shell test connects as the bootstrap superuser, so it's\nunaffected; verified manually that a non-superuser `SET` now gets\npermission denied.",
+          "timestamp": "2026-06-05T18:15:59Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/876497f424c4472cbe440212e64ecb982cb22feb"
+        },
+        "date": 1781175209613,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Build Time",
+            "value": 146611.683,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 15.74,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 16.19,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 21.29,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 23.03,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 25.7,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 30.92,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 34.05,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 40.6,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Throughput (avg ms/query)",
+            "value": 27.82,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Size",
+            "value": 1505.84,
             "unit": "MB"
           }
         ]
