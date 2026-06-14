@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781429899788,
+  "lastUpdate": 1781429907503,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -33493,6 +33493,78 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco_vacuum - Query Latency After Update VACUUM",
             "value": 9.55,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "876497f424c4472cbe440212e64ecb982cb22feb",
+          "message": "Restrict debug_panic_after_spill_finalize to superusers (#407)\n\n`pg_textsearch.debug_panic_after_spill_finalize` was `PGC_USERSET` but\nforces an `elog(PANIC)` in the spill path, which crashes the whole\ncluster into recovery. Any role able to trigger a spill (e.g. a bulk\nINSERT past the threshold) could use it as a repeatable full-cluster\nDoS, so this makes it `PGC_SUSET` like the other debug GUCs. The\ncrash-safety shell test connects as the bootstrap superuser, so it's\nunaffected; verified manually that a non-superuser `SET` now gets\npermission denied.",
+          "timestamp": "2026-06-05T18:15:59Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/876497f424c4472cbe440212e64ecb982cb22feb"
+        },
+        "date": 1781429906847,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco_vacuum - Index Size",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco_vacuum - Partial VACUUM (concentrated delete)",
+            "value": 3328.662,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_vacuum - Full VACUUM (uniform delete)",
+            "value": 7868.193,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_vacuum - Full VACUUM (uniform update)",
+            "value": 4533.553,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_vacuum - Index Size After Partial VACUUM",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco_vacuum - Index Size After Full VACUUM",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco_vacuum - Query Latency After Partial VACUUM",
+            "value": 9.3,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_vacuum - Query Latency After Full VACUUM",
+            "value": 8.8,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_vacuum - Index Size After Update VACUUM",
+            "value": 2453.4,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco_vacuum - Query Latency After Update VACUUM",
+            "value": 9.92,
             "unit": "ms"
           }
         ]
