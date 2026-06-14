@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781429907503,
+  "lastUpdate": 1781429915381,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -13159,6 +13159,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia (99.9K docs) - Weighted Throughput (avg ms/query)",
             "value": 0.26,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Index Size",
+            "value": 38.75,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "876497f424c4472cbe440212e64ecb982cb22feb",
+          "message": "Restrict debug_panic_after_spill_finalize to superusers (#407)\n\n`pg_textsearch.debug_panic_after_spill_finalize` was `PGC_USERSET` but\nforces an `elog(PANIC)` in the spill path, which crashes the whole\ncluster into recovery. Any role able to trigger a spill (e.g. a bulk\nINSERT past the threshold) could use it as a repeatable full-cluster\nDoS, so this makes it `PGC_SUSET` like the other debug GUCs. The\ncrash-safety shell test connects as the bootstrap superuser, so it's\nunaffected; verified manually that a non-superuser `SET` now gets\npermission denied.",
+          "timestamp": "2026-06-05T18:15:59Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/876497f424c4472cbe440212e64ecb982cb22feb"
+        },
+        "date": 1781429914490,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia (99.9K docs) - Index Build Time",
+            "value": 11726.552,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 1 Token Query (p50)",
+            "value": 0.12,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 2 Token Query (p50)",
+            "value": 0.19,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 3 Token Query (p50)",
+            "value": 0.26,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 4 Token Query (p50)",
+            "value": 0.28,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 5 Token Query (p50)",
+            "value": 0.32,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 6 Token Query (p50)",
+            "value": 0.39,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 7 Token Query (p50)",
+            "value": 0.45,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - 8+ Token Query (p50)",
+            "value": 0.61,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Weighted Latency (p50, ms)",
+            "value": 0.27,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia (99.9K docs) - Weighted Throughput (avg ms/query)",
+            "value": 0.3,
             "unit": "ms"
           },
           {
