@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781510311792,
+  "lastUpdate": 1781510319037,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -44384,6 +44384,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia_concurrent (0 docs) - Weighted Throughput (avg ms/query)",
             "value": 0.91,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "876497f424c4472cbe440212e64ecb982cb22feb",
+          "message": "Restrict debug_panic_after_spill_finalize to superusers (#407)\n\n`pg_textsearch.debug_panic_after_spill_finalize` was `PGC_USERSET` but\nforces an `elog(PANIC)` in the spill path, which crashes the whole\ncluster into recovery. Any role able to trigger a spill (e.g. a bulk\nINSERT past the threshold) could use it as a repeatable full-cluster\nDoS, so this makes it `PGC_SUSET` like the other debug GUCs. The\ncrash-safety shell test connects as the bootstrap superuser, so it's\nunaffected; verified manually that a non-superuser `SET` now gets\npermission denied.",
+          "timestamp": "2026-06-05T18:15:59Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/876497f424c4472cbe440212e64ecb982cb22feb"
+        },
+        "date": 1781510318601,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia_concurrent (0 docs) - Index Build Time",
+            "value": 1.17,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Insert Time",
+            "value": 0.239,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Concurrent Insert Time",
+            "value": 24505.338247,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 1 Token Query (p50)",
+            "value": 0.32,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 2 Token Query (p50)",
+            "value": 0.53,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 3 Token Query (p50)",
+            "value": 0.72,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 4 Token Query (p50)",
+            "value": 0.89,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 5 Token Query (p50)",
+            "value": 1.06,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 6 Token Query (p50)",
+            "value": 1.25,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 7 Token Query (p50)",
+            "value": 1.41,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - 8+ Token Query (p50)",
+            "value": 1.91,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Weighted Latency (p50, ms)",
+            "value": 0.83,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_concurrent (0 docs) - Weighted Throughput (avg ms/query)",
+            "value": 0.85,
             "unit": "ms"
           }
         ]
