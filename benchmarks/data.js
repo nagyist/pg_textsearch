@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782124411816,
+  "lastUpdate": 1782124420219,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -17103,6 +17103,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco (8.8M docs) - Index Size",
             "value": 1496.45,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f69d22d7aebd026c416e09338c26d2018f78095b",
+          "message": "Standby-safe deferred reclaim of displaced segment pages (#380) (#406)\n\nCloses #380.\n\n## The problem\n\nA segment merge used to free the displaced source pages straight to the\nFSM, which is fine on the primary but can let a hot standby's in-flight\nquery read a page that's already been reused — we have no custom rmgr to\nresolve recovery conflicts, so there's nothing to stop it.\n\n## The fix\n\nA merge now parks the displaced pages in a WAL-logged tombstone chain\noff the metapage (new v8 metapage field `pending_free_head`, each batch\nstamped with the merge's `FullTransactionId`). Parked pages only go back\nto the FSM once a later VACUUM or merge sees the stamp precede\n`GetOldestNonRemovableTransactionId`. This leans on\n`hot_standby_feedback=on` to hold the primary's horizon back while a\nstandby is still reading.\n\nTwo things worth a reviewer's attention:\n\n- The displaced pages flip from the level chain to the tombstone chain\nin the *same* `GenericXLog` record as the level swap, so a crash can\nnever leave them owned by neither list (lost) or both (double-free).\n- The drain unlinks the tombstone in WAL *before* calling\n`RecordFreeIndexPage`, so a crash mid-drain only leaks, never\ndouble-frees.\n\nTruncation's high-water mark now also folds in the tombstone chain so\nforce-merge can't shrink a parked page away. Everything stays\n`GenericXLog`-only — `wal_audit` confirms no rmgr.\n\n## On-disk format & upgrade\n\nThe metapage bumps to **v8** (adds `pending_free_head`). Existing\nindexes are read-compatible and upgrade lazily, with no REINDEX: a v6\n(≤1.2.x) or v7 (1.3.x) page is normalized on read and rewritten to v8 in\nplace on the first write (atomically, with `pd_lower` bumped so\n`GenericXLog` replays the new field). v5 and earlier still require\nREINDEX as before.\n\n## Observability\n\nNew superuser-only function `bm25_pending_free_pages(index_name)`\nreturns the number of displaced blocks currently parked (REVOKE'd from\nPUBLIC, `STABLE`, walks the tombstone chain under the per-index\n`LW_SHARED` lock).\n\n## Testing & CI\n\n- **`segment_reclaim`** SQL regression test (runs every PR):\npark-after-merge, drain-after-VACUUM, queries still correct.\n- **`standby_reclaim.sh`** crash-recovery test: parks pages, crashes\n(`-m immediate`), asserts stock recovery reconstructs the tombstone\nchain + `pending_free_head`, then VACUUM drains to zero.\n- **`replication_segment_reclaim.sh`** standby acceptance test: a live\nstandby snapshot with `hot_standby_feedback=on` holds the horizon so a\nmerge+VACUUM keeps pages parked; the standby reads cleanly across merge\nreplay; pages drain once the snapshot is released.\n- Both shell tests are wired into the gating CI jobs (`test:` on PG17/18\nand the PG17.2/PG18.1 `sanitizer:` jobs, where a use-after-recycle would\ntrip ASan) plus the non-gating coverage job. The `upgrade-tests` matrix\nnow includes 1.3.0 so the **v7→v8** lazy upgrade is exercised\nend-to-end.",
+          "timestamp": "2026-06-17T00:52:21Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/f69d22d7aebd026c416e09338c26d2018f78095b"
+        },
+        "date": 1782124419162,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Build Time",
+            "value": 150538.1,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 17.96,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 18.04,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 23.03,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 25.17,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 27.66,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 34.28,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 34.44,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 42.4,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Throughput (avg ms/query)",
+            "value": 29.65,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Size",
+            "value": 1420.16,
             "unit": "MB"
           }
         ]
