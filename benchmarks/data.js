@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782219335125,
+  "lastUpdate": 1782219342931,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -17463,6 +17463,83 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco (8.8M docs) - Index Size",
             "value": 1420.16,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "578ff529894992fb9e67cae4c69424e65c84868e",
+          "message": "Release v1.3.1 (#419)\n\n## Summary\n- prepare pg_textsearch v1.3.1 from current main\n- rename release SQL artifacts and set default/library version to 1.3.1\n- rename the release banner reference and image to v1.3.1\n\n## Release procedure\n- audited v1.3.0 -> current SQL delta; only new catalog object is\nbm25_pending_free_pages(text), covered by\nsql/pg_textsearch--1.3.0--1.3.1.sql\n- left upgrade-tests old_version matrix unchanged because it already\nincludes previous release 1.3.0\n\n## Validation\n- PG_CONFIG=/home/azureuser/pg17/bin/pg_config make\n- PG_CONFIG=/home/azureuser/pg17/bin/pg_config make format-check\n- PATH=/home/azureuser/pg17/bin:$PATH\nPG_CONFIG=/home/azureuser/pg17/bin/pg_config PGHOST=/tmp make test-local",
+          "timestamp": "2026-06-23T01:39:54Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/578ff529894992fb9e67cae4c69424e65c84868e"
+        },
+        "date": 1782219342266,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Build Time",
+            "value": 119013.525,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 14.49,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 14.25,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 19.34,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 21.31,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 23.24,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 28.46,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 29.29,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 35.25,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Throughput (avg ms/query)",
+            "value": 22.1,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco (8.8M docs) - Index Size",
+            "value": 1503.47,
             "unit": "MB"
           }
         ]
