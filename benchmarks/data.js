@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782296702967,
+  "lastUpdate": 1782296709962,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -41861,6 +41861,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco_insert (0 docs) - Weighted Throughput (avg ms/query)",
             "value": 14.35,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Index Size",
+            "value": 9485.84,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "578ff529894992fb9e67cae4c69424e65c84868e",
+          "message": "Release v1.3.1 (#419)\n\n## Summary\n- prepare pg_textsearch v1.3.1 from current main\n- rename release SQL artifacts and set default/library version to 1.3.1\n- rename the release banner reference and image to v1.3.1\n\n## Release procedure\n- audited v1.3.0 -> current SQL delta; only new catalog object is\nbm25_pending_free_pages(text), covered by\nsql/pg_textsearch--1.3.0--1.3.1.sql\n- left upgrade-tests old_version matrix unchanged because it already\nincludes previous release 1.3.0\n\n## Validation\n- PG_CONFIG=/home/azureuser/pg17/bin/pg_config make\n- PG_CONFIG=/home/azureuser/pg17/bin/pg_config make format-check\n- PATH=/home/azureuser/pg17/bin:$PATH\nPG_CONFIG=/home/azureuser/pg17/bin/pg_config PGHOST=/tmp make test-local",
+          "timestamp": "2026-06-23T01:39:54Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/578ff529894992fb9e67cae4c69424e65c84868e"
+        },
+        "date": 1782296709659,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco_insert (0 docs) - Index Build Time",
+            "value": 1.36,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Insert Time",
+            "value": 891490.978,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 1 Token Query (p50)",
+            "value": 4.27,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 2 Token Query (p50)",
+            "value": 5.69,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 3 Token Query (p50)",
+            "value": 8.55,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 4 Token Query (p50)",
+            "value": 11.61,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 5 Token Query (p50)",
+            "value": 13.63,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 6 Token Query (p50)",
+            "value": 17.52,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 7 Token Query (p50)",
+            "value": 21.43,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 8+ Token Query (p50)",
+            "value": 30.27,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Weighted Latency (p50, ms)",
+            "value": 10.6,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Weighted Throughput (avg ms/query)",
+            "value": 11.65,
             "unit": "ms"
           },
           {
