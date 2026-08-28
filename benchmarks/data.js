@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787953155158,
+  "lastUpdate": 1787953163909,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -34984,6 +34984,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco_insert (8.8M docs) - Index Size",
             "value": 951.42,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "283cc7f137337047e5c1d16b61538b9363de5250",
+          "message": "test: stabilize explicit_index tie ordering (#443)\n\n## Summary\n- The `explicit_index` implicit-resolution case inserts 1000 identical\ndocuments, so BM25 scores tie and the returned ids are\nphysical-order-dependent (e.g. `{991,981,971}` vs `{1,11,21}` depending\non insertion order).\n- Replace the nondeterministic id output with a deterministic BM25 score\nassertion, while keeping the `EXPLAIN` that proves the BM25 Index Scan\nis used and preserving both planner warnings.\n\n## Context\nReproducible on stock PostgreSQL by varying physical insertion order. No\nproduct code change — the test assumption was unstable.\n\n## Verification\n- `explicit_index` passes on PostgreSQL 17.9 and 18.4\n- EXPLAIN confirms the executed statement plans to `Index Scan using\ncontent_idx_simple` with both warnings\n- Deterministic score `-0.0004996252828277647` asserted instead of tied\nids\n\n---------\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\nCopilot-Session: f3e1824a-956b-4849-8411-9dac0284f411\nCopilot-Session: 10e2ddd4-5530-4f76-8c2b-1207fa0ce59b",
+          "timestamp": "2026-08-12T23:38:29Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/283cc7f137337047e5c1d16b61538b9363de5250"
+        },
+        "date": 1787953163187,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Index Build Time",
+            "value": 5449.717,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Insert Time",
+            "value": 239706.704,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 1 Token Query (p50)",
+            "value": 84.95,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 2 Token Query (p50)",
+            "value": 78.24,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 3 Token Query (p50)",
+            "value": 88.83,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 4 Token Query (p50)",
+            "value": 90.62,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 5 Token Query (p50)",
+            "value": 90.21,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 6 Token Query (p50)",
+            "value": 95.55,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 7 Token Query (p50)",
+            "value": 94.77,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 8+ Token Query (p50)",
+            "value": 95.13,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Throughput (avg ms/query)",
+            "value": 61.37,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Index Size",
+            "value": 991.9,
             "unit": "MB"
           }
         ]
