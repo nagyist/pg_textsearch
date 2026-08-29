@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788020245048,
+  "lastUpdate": 1788020254049,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -71712,6 +71712,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco_insert (0 docs) - Weighted Throughput (avg ms/query)",
             "value": 17.11,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Index Size",
+            "value": 9485.84,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "283cc7f137337047e5c1d16b61538b9363de5250",
+          "message": "test: stabilize explicit_index tie ordering (#443)\n\n## Summary\n- The `explicit_index` implicit-resolution case inserts 1000 identical\ndocuments, so BM25 scores tie and the returned ids are\nphysical-order-dependent (e.g. `{991,981,971}` vs `{1,11,21}` depending\non insertion order).\n- Replace the nondeterministic id output with a deterministic BM25 score\nassertion, while keeping the `EXPLAIN` that proves the BM25 Index Scan\nis used and preserving both planner warnings.\n\n## Context\nReproducible on stock PostgreSQL by varying physical insertion order. No\nproduct code change — the test assumption was unstable.\n\n## Verification\n- `explicit_index` passes on PostgreSQL 17.9 and 18.4\n- EXPLAIN confirms the executed statement plans to `Index Scan using\ncontent_idx_simple` with both warnings\n- Deterministic score `-0.0004996252828277647` asserted instead of tied\nids\n\n---------\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\nCopilot-Session: f3e1824a-956b-4849-8411-9dac0284f411\nCopilot-Session: 10e2ddd4-5530-4f76-8c2b-1207fa0ce59b",
+          "timestamp": "2026-08-12T23:38:29Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/283cc7f137337047e5c1d16b61538b9363de5250"
+        },
+        "date": 1788020253500,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco_insert (0 docs) - Index Build Time",
+            "value": 1.243,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Insert Time",
+            "value": 1014167.993,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 1 Token Query (p50)",
+            "value": 4.51,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 2 Token Query (p50)",
+            "value": 5.29,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 3 Token Query (p50)",
+            "value": 8.41,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 4 Token Query (p50)",
+            "value": 14.57,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 5 Token Query (p50)",
+            "value": 14.62,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 6 Token Query (p50)",
+            "value": 17.75,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 7 Token Query (p50)",
+            "value": 21.85,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - 8+ Token Query (p50)",
+            "value": 38.34,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Weighted Latency (p50, ms)",
+            "value": 11.56,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco_insert (0 docs) - Weighted Throughput (avg ms/query)",
+            "value": 15.39,
             "unit": "ms"
           },
           {
