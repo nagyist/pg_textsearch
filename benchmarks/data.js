@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789566384093,
+  "lastUpdate": 1789566388930,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -16977,6 +16977,133 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
             "value": 8.64,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "283cc7f137337047e5c1d16b61538b9363de5250",
+          "message": "test: stabilize explicit_index tie ordering (#443)\n\n## Summary\n- The `explicit_index` implicit-resolution case inserts 1000 identical\ndocuments, so BM25 scores tie and the returned ids are\nphysical-order-dependent (e.g. `{991,981,971}` vs `{1,11,21}` depending\non insertion order).\n- Replace the nondeterministic id output with a deterministic BM25 score\nassertion, while keeping the `EXPLAIN` that proves the BM25 Index Scan\nis used and preserving both planner warnings.\n\n## Context\nReproducible on stock PostgreSQL by varying physical insertion order. No\nproduct code change — the test assumption was unstable.\n\n## Verification\n- `explicit_index` passes on PostgreSQL 17.9 and 18.4\n- EXPLAIN confirms the executed statement plans to `Index Scan using\ncontent_idx_simple` with both warnings\n- Deterministic score `-0.0004996252828277647` asserted instead of tied\nids\n\n---------\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\nCopilot-Session: f3e1824a-956b-4849-8411-9dac0284f411\nCopilot-Session: 10e2ddd4-5530-4f76-8c2b-1207fa0ce59b",
+          "timestamp": "2026-08-12T23:38:29Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/283cc7f137337047e5c1d16b61538b9363de5250"
+        },
+        "date": 1789566388156,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 178986.21,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 0.51,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 1.08,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 2.1,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 3.41,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 5.78,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 8.15,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 12.52,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 19,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Latency (p50, ms)",
+            "value": 3.59,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Throughput (avg ms/query)",
+            "value": 4.59,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 1216,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Partial VACUUM (concentrated delete)",
+            "value": 6401.773,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform delete)",
+            "value": 11760.803,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform update)",
+            "value": 6548.809,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Partial VACUUM",
+            "value": 2595.85,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Full VACUUM",
+            "value": 2595.86,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Partial VACUUM",
+            "value": 7.49,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Full VACUUM",
+            "value": 7.43,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Update VACUUM",
+            "value": 2595.86,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
+            "value": 7.9,
             "unit": "ms"
           }
         ]
