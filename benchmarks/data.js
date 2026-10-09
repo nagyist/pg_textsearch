@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791569227868,
+  "lastUpdate": 1791569232317,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -56656,6 +56656,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco_insert (8.8M docs) - Index Size",
             "value": 994.25,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1",
+          "message": "Fix maintenance when pg_textsearch is preloaded but not installed (#543)\n\nPreloaded utility hooks tried to look up the BM25 access method even in\ndatabases without pg_textsearch, breaking database/schema REINDEX,\nuntargeted VACUUM FULL and CLUSTER, and REASSIGN OWNED.\n\nReturn an empty index list when the access method is absent. Add\nregression coverage before extension installation, with a BM25 index,\nand after dropping the extension in the same session.",
+          "timestamp": "2026-10-02T02:27:17Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1"
+        },
+        "date": 1791569231829,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Index Build Time",
+            "value": 6414.128,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Insert Time",
+            "value": 221613.436,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 1 Token Query (p50)",
+            "value": 82.34,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 2 Token Query (p50)",
+            "value": 79.74,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 3 Token Query (p50)",
+            "value": 84.15,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 4 Token Query (p50)",
+            "value": 86.07,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 5 Token Query (p50)",
+            "value": 86.88,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 6 Token Query (p50)",
+            "value": 92.1,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 7 Token Query (p50)",
+            "value": 90.86,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - 8+ Token Query (p50)",
+            "value": 92.82,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Throughput (avg ms/query)",
+            "value": 58.99,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_insert (8.8M docs) - Index Size",
+            "value": 965.1,
             "unit": "MB"
           }
         ]
