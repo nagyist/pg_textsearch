@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791900773424,
+  "lastUpdate": 1791900777738,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -21405,6 +21405,133 @@ window.BENCHMARK_DATA = {
           {
             "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
             "value": 5.58,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1",
+          "message": "Fix maintenance when pg_textsearch is preloaded but not installed (#543)\n\nPreloaded utility hooks tried to look up the BM25 access method even in\ndatabases without pg_textsearch, breaking database/schema REINDEX,\nuntargeted VACUUM FULL and CLUSTER, and REASSIGN OWNED.\n\nReturn an empty index list when the access method is absent. Add\nregression coverage before extension installation, with a BM25 index,\nand after dropping the extension in the same session.",
+          "timestamp": "2026-10-02T02:27:17Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1"
+        },
+        "date": 1791900776786,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "msmarco (8.8M docs) - Index Build Time",
+            "value": 230189.07,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 1 Token Query (p50)",
+            "value": 0.74,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 2 Token Query (p50)",
+            "value": 1.3,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 3 Token Query (p50)",
+            "value": 2.44,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 4 Token Query (p50)",
+            "value": 3.81,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 5 Token Query (p50)",
+            "value": 6.09,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 6 Token Query (p50)",
+            "value": 9.18,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 7 Token Query (p50)",
+            "value": 13.57,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - 8+ Token Query (p50)",
+            "value": 20.96,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Latency (p50, ms)",
+            "value": 4,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Weighted Throughput (avg ms/query)",
+            "value": 5.04,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size",
+            "value": 2432.6,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Partial VACUUM (concentrated delete)",
+            "value": 1664.464,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform delete)",
+            "value": 6499.808,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Full VACUUM (uniform update)",
+            "value": 4569.996,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Partial VACUUM",
+            "value": 2435,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Full VACUUM",
+            "value": 2435,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Partial VACUUM",
+            "value": 7.99,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Full VACUUM",
+            "value": 7.99,
+            "unit": "ms"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Index Size After Update VACUUM",
+            "value": 2435,
+            "unit": "MB"
+          },
+          {
+            "name": "msmarco (8.8M docs) - Query Latency After Update VACUUM",
+            "value": 7.79,
             "unit": "ms"
           }
         ]
