@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792236206980,
+  "lastUpdate": 1792236211724,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -77098,6 +77098,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "paradedb_msmarco_concurrent - Throughput (avg ms/query)",
             "value": 46.33,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1",
+          "message": "Fix maintenance when pg_textsearch is preloaded but not installed (#543)\n\nPreloaded utility hooks tried to look up the BM25 access method even in\ndatabases without pg_textsearch, breaking database/schema REINDEX,\nuntargeted VACUUM FULL and CLUSTER, and REASSIGN OWNED.\n\nReturn an empty index list when the access method is absent. Add\nregression coverage before extension installation, with a BM25 index,\nand after dropping the extension in the same session.",
+          "timestamp": "2026-10-02T02:27:17Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1"
+        },
+        "date": 1792236211107,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "paradedb_msmarco_concurrent - Index Build Time",
+            "value": 213.925,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - Insert Time",
+            "value": 0.58,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - Concurrent Insert Time",
+            "value": 1511105.941171,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 1 Token Query (p50)",
+            "value": 69.84,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 2 Token Query (p50)",
+            "value": 30.02,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 3 Token Query (p50)",
+            "value": 74.99,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 4 Token Query (p50)",
+            "value": 76.22,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 5 Token Query (p50)",
+            "value": 78.9,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 6 Token Query (p50)",
+            "value": 84.14,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 7 Token Query (p50)",
+            "value": 85.58,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - 8+ Token Query (p50)",
+            "value": 92.77,
+            "unit": "ms"
+          },
+          {
+            "name": "paradedb_msmarco_concurrent - Throughput (avg ms/query)",
+            "value": 74.48,
             "unit": "ms"
           }
         ]
