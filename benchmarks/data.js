@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792842401991,
+  "lastUpdate": 1792842405904,
   "repoUrl": "https://github.com/nagyist/pg_textsearch",
   "entries": {
     "cranfield Benchmarks": [
@@ -148497,6 +148497,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "wikipedia_insert (0 docs) - Weighted Throughput (avg ms/query)",
             "value": 0.76,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - Index Size",
+            "value": 401.68,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Todd J. Green",
+            "username": "tjgreen42",
+            "email": "tjgreen@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1",
+          "message": "Fix maintenance when pg_textsearch is preloaded but not installed (#543)\n\nPreloaded utility hooks tried to look up the BM25 access method even in\ndatabases without pg_textsearch, breaking database/schema REINDEX,\nuntargeted VACUUM FULL and CLUSTER, and REASSIGN OWNED.\n\nReturn an empty index list when the access method is absent. Add\nregression coverage before extension installation, with a BM25 index,\nand after dropping the extension in the same session.",
+          "timestamp": "2026-10-02T02:27:17Z",
+          "url": "https://github.com/nagyist/pg_textsearch/commit/a5fdfeb1b747475ab2fe8b24abc7602dcb95a5a1"
+        },
+        "date": 1792842405537,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "wikipedia_insert (0 docs) - Index Build Time",
+            "value": 1.407,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - Insert Time",
+            "value": 30423.427,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 1 Token Query (p50)",
+            "value": 0.33,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 2 Token Query (p50)",
+            "value": 0.51,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 3 Token Query (p50)",
+            "value": 0.68,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 4 Token Query (p50)",
+            "value": 0.86,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 5 Token Query (p50)",
+            "value": 1.01,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 6 Token Query (p50)",
+            "value": 1.22,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 7 Token Query (p50)",
+            "value": 1.42,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - 8+ Token Query (p50)",
+            "value": 1.87,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - Weighted Latency (p50, ms)",
+            "value": 0.8,
+            "unit": "ms"
+          },
+          {
+            "name": "wikipedia_insert (0 docs) - Weighted Throughput (avg ms/query)",
+            "value": 0.82,
             "unit": "ms"
           },
           {
